@@ -1,0 +1,9 @@
+{
+    "common_apps": [
+        {"name": "Google Chrome", "winget_id": "Google.Chrome"},
+        {"name": "7-Zip", "winget_id": "7zip.7zip"},
+        {"name": "Adobe Acrobat Reader", "winget_id": "Adobe.Acrobat.Reader.64-bit"},
+        {"name": "Notepad++", "winget_id": "Notepad++.Notepad++"},
+        {"name": "VLC Media Player", "winget_id": "VideoLAN.VLC"}
+    ]
+}

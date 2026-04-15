@@ -1,0 +1,44 @@
+{
+    "registry_tweaks": [
+        {
+            "name": "Disable Auto-Restart After Updates",
+            "description": "Prevents Windows from auto-restarting after updates without user consent",
+            "key": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU",
+            "value_name": "NoAutoRebootWithLoggedOnUsers",
+            "value_data": 1,
+            "value_type": "DWORD"
+        },
+        {
+            "name": "Disable Consumer Features",
+            "description": "Disables suggested apps and consumer experience features",
+            "key": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent",
+            "value_name": "DisableWindowsConsumerFeatures",
+            "value_data": 1,
+            "value_type": "DWORD"
+        },
+        {
+            "name": "Disable Lock Screen Ads",
+            "description": "Removes ads and suggestions from the lock screen",
+            "key": "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
+            "value_name": "RotatingLockScreenOverlayEnabled",
+            "value_data": 0,
+            "value_type": "DWORD"
+        },
+        {
+            "name": "Show File Extensions",
+            "description": "Shows file extensions in File Explorer",
+            "key": "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+            "value_name": "HideFileExt",
+            "value_data": 0,
+            "value_type": "DWORD"
+        },
+        {
+            "name": "Disable Startup Programs Delay",
+            "description": "Removes the startup delay for applications",
+            "key": "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Serialize",
+            "value_name": "StartupDelayInMSec",
+            "value_data": 0,
+            "value_type": "DWORD"
+        }
+    ]
+}

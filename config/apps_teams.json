@@ -1,0 +1,32 @@
+{
+    "teams": {
+        "IT / Admin": [
+            {"name": "VS Code", "winget_id": "Microsoft.VisualStudioCode"},
+            {"name": "PuTTY", "winget_id": "PuTTY.PuTTY"},
+            {"name": "WinSCP", "winget_id": "WinSCP.WinSCP"},
+            {"name": "Wireshark", "winget_id": "WiresharkFoundation.Wireshark"},
+            {"name": "Remote Desktop Manager", "winget_id": "Devolutions.RemoteDesktopManager"}
+        ],
+        "Development": [
+            {"name": "VS Code", "winget_id": "Microsoft.VisualStudioCode"},
+            {"name": "Git", "winget_id": "Git.Git"},
+            {"name": "Python 3", "winget_id": "Python.Python.3.12"},
+            {"name": "Node.js", "winget_id": "OpenJS.NodeJS"},
+            {"name": "Postman", "winget_id": "Postman.Postman"}
+        ],
+        "Design": [
+            {"name": "Figma", "winget_id": "Figma.Figma"},
+            {"name": "GIMP", "winget_id": "GIMP.GIMP"},
+            {"name": "Inkscape", "winget_id": "Inkscape.Inkscape"}
+        ],
+        "Accounts / Finance": [
+            {"name": "Microsoft Teams", "winget_id": "Microsoft.Teams"},
+            {"name": "Zoom", "winget_id": "Zoom.Zoom"}
+        ],
+        "Management": [
+            {"name": "Microsoft Teams", "winget_id": "Microsoft.Teams"},
+            {"name": "Zoom", "winget_id": "Zoom.Zoom"},
+            {"name": "Slack", "winget_id": "SlackTechnologies.Slack"}
+        ]
+    }
+}

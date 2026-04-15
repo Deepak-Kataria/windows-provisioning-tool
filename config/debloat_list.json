@@ -1,0 +1,25 @@
+{
+    "appx_packages": [
+        {"name": "Xbox", "package": "Microsoft.XboxApp"},
+        {"name": "Xbox Game Bar", "package": "Microsoft.XboxGamingOverlay"},
+        {"name": "Xbox Game Overlay", "package": "Microsoft.XboxGameOverlay"},
+        {"name": "Xbox Identity Provider", "package": "Microsoft.XboxIdentityProvider"},
+        {"name": "Xbox Speech To Text", "package": "Microsoft.XboxSpeechToTextOverlay"},
+        {"name": "Cortana", "package": "Microsoft.549981C3F5F10"},
+        {"name": "Get Help", "package": "Microsoft.GetHelp"},
+        {"name": "Microsoft Tips", "package": "Microsoft.Getstarted"},
+        {"name": "Mail and Calendar", "package": "microsoft.windowscommunicationsapps"},
+        {"name": "Maps", "package": "Microsoft.WindowsMaps"},
+        {"name": "Movies & TV", "package": "Microsoft.ZuneVideo"},
+        {"name": "Groove Music", "package": "Microsoft.ZuneMusic"},
+        {"name": "Mixed Reality Portal", "package": "Microsoft.MixedReality.Portal"},
+        {"name": "3D Viewer", "package": "Microsoft.Microsoft3DViewer"},
+        {"name": "Solitaire Collection", "package": "Microsoft.MicrosoftSolitaireCollection"},
+        {"name": "Feedback Hub", "package": "Microsoft.WindowsFeedbackHub"},
+        {"name": "Your Phone", "package": "Microsoft.YourPhone"},
+        {"name": "Skype", "package": "Microsoft.SkypeApp"},
+        {"name": "People", "package": "Microsoft.People"},
+        {"name": "Paint 3D", "package": "Microsoft.MSPaint"},
+        {"name": "Microsoft Teams (Personal)", "package": "MicrosoftTeams"}
+    ]
+}
