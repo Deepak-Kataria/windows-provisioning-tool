@@ -1,9 +1,11 @@
 param(
     [Parameter(Mandatory=$true)]
-    [string[]]$Packages
+    [string]$Packages
 )
 
-foreach ($pkg in $Packages) {
+$PackageList = $Packages -split ','
+
+foreach ($pkg in $PackageList) {
     try {
         $app = Get-AppxPackage -Name $pkg -AllUsers -ErrorAction SilentlyContinue
         if ($app) {

@@ -4,6 +4,7 @@ from ui.tab_debloat import DebloatTab
 from ui.tab_telemetry import TelemetryTab
 from ui.tab_apps import AppsTab
 from ui.tab_org_settings import OrgSettingsTab
+from ui.tab_users import UsersTab
 
 
 class Dashboard(ctk.CTkFrame):
@@ -52,10 +53,11 @@ class Dashboard(ctk.CTkFrame):
             ("Privacy", TelemetryTab),
             ("Apps", AppsTab),
             ("Org Settings", OrgSettingsTab),
+            ("Users", UsersTab),
         ]
 
         # Admin-only tabs
-        admin_only = {"System", "Debloat", "Privacy", "Org Settings"}
+        admin_only = {"System", "Debloat", "Privacy", "Org Settings", "Users"}
 
         for tab_name, TabClass in tab_definitions:
             if tab_name in admin_only and self.role != "admin":

@@ -3,20 +3,26 @@ param(
     [string]$DomainName,
     [Parameter(Mandatory=$true)]
     [string]$Username,
-    [Parameter(Mandatory=$true)]
-    [string]$Password,
-    [string]$OUPath = ""
+    [string]$OUPath = "",
+    [string]$ServerIP = ""
 )
+
+$Password = [Console]::In.ReadLine()
 
 try {
     $SecurePassword = ConvertTo-SecureString $Password -AsPlainText -Force
     $Credential = New-Object System.Management.Automation.PSCredential("$DomainName\$Username", $SecurePassword)
 
-    if ($OUPath -ne "") {
-        Add-Computer -DomainName $DomainName -Credential $Credential -OUPath $OUPath -Force -ErrorAction Stop
-    } else {
-        Add-Computer -DomainName $DomainName -Credential $Credential -Force -ErrorAction Stop
+    $params = @{
+        DomainName = $DomainName
+        Credential = $Credential
+        Force      = $true
+        ErrorAction = "Stop"
     }
+    if ($OUPath -ne "") { $params["OUPath"] = $OUPath }
+    if ($ServerIP -ne "") { $params["Server"] = $ServerIP }
+
+    Add-Computer @params
 
     Write-Output "SUCCESS: Joined domain $DomainName. Reboot required."
 } catch {

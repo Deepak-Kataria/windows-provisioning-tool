@@ -4,8 +4,27 @@ import bcrypt
 
 CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "credentials.json")
 
+_DEFAULT_CREDENTIALS = {
+    "users": [
+        {
+            "username": "admin",
+            "password_hash": "$2b$12$placeholder_change_on_first_run",
+            "role": "admin",
+            "display_name": "Administrator"
+        }
+    ]
+}
+
+
+def _ensure_credentials_file():
+    if not os.path.exists(CONFIG_PATH):
+        os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+        with open(CONFIG_PATH, "w") as f:
+            json.dump(_DEFAULT_CREDENTIALS, f, indent=4)
+
 
 def load_credentials():
+    _ensure_credentials_file()
     with open(CONFIG_PATH, "r") as f:
         return json.load(f)
 
@@ -13,6 +32,15 @@ def load_credentials():
 def save_credentials(data):
     with open(CONFIG_PATH, "w") as f:
         json.dump(data, f, indent=4)
+
+
+def is_first_run(username: str) -> bool:
+    """Returns True if the user still has the default placeholder password."""
+    data = load_credentials()
+    for user in data["users"]:
+        if user["username"] == username:
+            return user["password_hash"] == "$2b$12$placeholder_change_on_first_run"
+    return False
 
 
 def authenticate(username: str, password: str):

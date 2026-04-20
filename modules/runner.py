@@ -55,6 +55,33 @@ def run_winget(winget_id: str, callback=None):
     return process.returncode, "\n".join(output_lines)
 
 
+def run_powershell_with_secret(script_name: str, args: list, secret: str, callback=None):
+    """Run a PowerShell script, passing a secret via stdin to avoid exposing it in the process list."""
+    script_path = os.path.join(SCRIPTS_DIR, script_name)
+    cmd = ["powershell.exe", "-ExecutionPolicy", "Bypass", "-File", script_path] + args
+
+    process = subprocess.Popen(
+        cmd,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True
+    )
+    process.stdin.write(secret + "\n")
+    process.stdin.close()
+
+    output_lines = []
+    for line in process.stdout:
+        line = line.strip()
+        if line:
+            output_lines.append(line)
+            if callback:
+                callback(line)
+
+    process.wait()
+    return process.returncode, "\n".join(output_lines)
+
+
 def run_inline_powershell(script: str, callback=None):
     """Run an inline PowerShell command string."""
     cmd = ["powershell.exe", "-ExecutionPolicy", "Bypass", "-Command", script]

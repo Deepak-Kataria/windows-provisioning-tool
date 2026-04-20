@@ -1,6 +1,8 @@
 import customtkinter as ctk
 from ui.login_screen import LoginScreen
 from ui.dashboard import Dashboard
+from ui.first_run_dialog import FirstRunDialog
+from modules.auth import is_first_run
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -22,6 +24,13 @@ class App(ctk.CTk):
         login.grid(row=0, column=0, sticky="nsew")
 
     def _on_login(self, username, role, display_name):
+        if is_first_run(username):
+            FirstRunDialog(self, username,
+                           on_complete=lambda: self._show_dashboard(username, role, display_name))
+        else:
+            self._show_dashboard(username, role, display_name)
+
+    def _show_dashboard(self, username, role, display_name):
         self._clear()
         dashboard = Dashboard(self, username, role, display_name,
                                on_logout=self._show_login)

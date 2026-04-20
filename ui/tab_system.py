@@ -2,7 +2,8 @@ import customtkinter as ctk
 import json
 import os
 import threading
-from modules.runner import run_powershell
+import tkinter.messagebox as msgbox
+from modules.runner import run_powershell, run_powershell_with_secret
 from modules.logger import log
 
 CONFIG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config")
@@ -34,12 +35,14 @@ class SystemTab(ctk.CTkFrame):
 
         ctk.CTkLabel(rename_frame, text="Device Type:").grid(
             row=1, column=0, padx=20, pady=8, sticky="w")
-        ctk.CTkRadioButton(rename_frame, text="Desktop", variable=self.device_type,
+        radio_frame = ctk.CTkFrame(rename_frame, fg_color="transparent")
+        radio_frame.grid(row=1, column=1, columnspan=2, padx=8, pady=8, sticky="w")
+        ctk.CTkRadioButton(radio_frame, text="Desktop", variable=self.device_type,
                             value="Desktop", command=self._update_preview).grid(
-            row=1, column=1, padx=8, sticky="w")
-        ctk.CTkRadioButton(rename_frame, text="Laptop", variable=self.device_type,
+            row=0, column=0, padx=(0, 16))
+        ctk.CTkRadioButton(radio_frame, text="Laptop", variable=self.device_type,
                             value="Laptop", command=self._update_preview).grid(
-            row=1, column=2, padx=8, sticky="w")
+            row=0, column=1)
 
         ctk.CTkLabel(rename_frame, text="Company Prefix:").grid(
             row=2, column=0, padx=20, pady=8, sticky="w")
@@ -78,27 +81,58 @@ class SystemTab(ctk.CTkFrame):
                       font=ctk.CTkFont(size=16, weight="bold")).grid(
             row=0, column=0, columnspan=2, sticky="w", padx=20, pady=(16, 8))
 
-        fields = [
-            ("Domain Name:", "domain_name_entry", self.domain_config.get("domain_name", ""), "e.g. company.local"),
-            ("OU Path (optional):", "ou_entry", self.domain_config.get("ou_path", ""), "e.g. OU=Computers,DC=company,DC=local"),
-            ("Domain Username:", "domain_user_entry", "", "Admin username"),
-            ("Domain Password:", "domain_pass_entry", "", "Admin password"),
-        ]
+        # Domain Name
+        ctk.CTkLabel(domain_frame, text="Domain Name:").grid(
+            row=1, column=0, padx=20, pady=6, sticky="w")
+        self.domain_name_entry = ctk.CTkEntry(domain_frame, width=280,
+                                               placeholder_text="e.g. company.local")
+        default_domain = self.domain_config.get("domain_name", "")
+        if default_domain:
+            self.domain_name_entry.insert(0, default_domain)
+        self.domain_name_entry.grid(row=1, column=1, padx=20, pady=6, sticky="w")
 
-        for i, (label, attr, default, placeholder) in enumerate(fields):
-            ctk.CTkLabel(domain_frame, text=label).grid(
-                row=i + 1, column=0, padx=20, pady=6, sticky="w")
-            entry = ctk.CTkEntry(domain_frame, width=280, placeholder_text=placeholder,
-                                  show="*" if "Password" in label else "")
-            if default:
-                entry.insert(0, default)
-            entry.grid(row=i + 1, column=1, padx=20, pady=6, sticky="w")
-            setattr(self, attr, entry)
+        # DC Server IP
+        ctk.CTkLabel(domain_frame, text="DC Server IP:").grid(
+            row=2, column=0, padx=20, pady=6, sticky="w")
+        self.dc_ip_entry = ctk.CTkEntry(domain_frame, width=280,
+                                         placeholder_text="e.g. 192.168.1.10  (optional)")
+        default_dns = self.domain_config.get("dns_server", "")
+        if default_dns:
+            self.dc_ip_entry.insert(0, default_dns)
+        self.dc_ip_entry.grid(row=2, column=1, padx=20, pady=6, sticky="w")
+
+        # OU Path with Browse button
+        ctk.CTkLabel(domain_frame, text="OU Path (optional):").grid(
+            row=3, column=0, padx=20, pady=6, sticky="w")
+        ou_row = ctk.CTkFrame(domain_frame, fg_color="transparent")
+        ou_row.grid(row=3, column=1, padx=20, pady=6, sticky="w")
+        self.ou_entry = ctk.CTkEntry(ou_row, width=210,
+                                      placeholder_text="e.g. OU=Computers,DC=company,DC=local")
+        default_ou = self.domain_config.get("ou_path", "")
+        if default_ou:
+            self.ou_entry.insert(0, default_ou)
+        self.ou_entry.grid(row=0, column=0)
+        self._browse_btn = ctk.CTkButton(ou_row, text="Browse...", width=80,
+                                          command=self._browse_ous)
+        self._browse_btn.grid(row=0, column=1, padx=(8, 0))
+
+        # Domain Username
+        ctk.CTkLabel(domain_frame, text="Domain Username:").grid(
+            row=4, column=0, padx=20, pady=6, sticky="w")
+        self.domain_user_entry = ctk.CTkEntry(domain_frame, width=280,
+                                               placeholder_text="Admin username")
+        self.domain_user_entry.grid(row=4, column=1, padx=20, pady=6, sticky="w")
+
+        # Domain Password
+        ctk.CTkLabel(domain_frame, text="Domain Password:").grid(
+            row=5, column=0, padx=20, pady=6, sticky="w")
+        self.domain_pass_entry = ctk.CTkEntry(domain_frame, width=280,
+                                               placeholder_text="Admin password", show="*")
+        self.domain_pass_entry.grid(row=5, column=1, padx=20, pady=6, sticky="w")
 
         join_btn = ctk.CTkButton(domain_frame, text="Join Domain",
                                   command=self._join_domain)
-        join_btn.grid(row=len(fields) + 1, column=0, columnspan=2,
-                       padx=20, pady=(8, 16), sticky="w")
+        join_btn.grid(row=6, column=0, columnspan=2, padx=20, pady=(8, 16), sticky="w")
 
         # Output log
         ctk.CTkLabel(self, text="Output",
@@ -145,8 +179,79 @@ class SystemTab(ctk.CTkFrame):
 
         threading.Thread(target=task, daemon=True).start()
 
+    def _browse_ous(self):
+        domain = self.domain_name_entry.get().strip()
+        server_ip = self.dc_ip_entry.get().strip()
+        username = self.domain_user_entry.get().strip()
+        password = self.domain_pass_entry.get()
+
+        missing = []
+        if not domain:    missing.append("Domain Name")
+        if not username:  missing.append("Domain Username")
+        if not password:  missing.append("Domain Password")
+        if missing:
+            msgbox.showerror("Missing Fields",
+                             f"Please fill in: {', '.join(missing)}")
+            return
+
+        target = server_ip if server_ip else domain
+        self._browse_btn.configure(text="Fetching...", state="disabled")
+        self._append_output(f"Pinging {target}...")
+
+        def fetch():
+            import socket
+            try:
+                sock = socket.create_connection((target, 389), timeout=5)
+                sock.close()
+            except OSError:
+                self.after(0, lambda: self._browse_error(
+                    f"Cannot reach {target} on port 389 (LDAP).\n\n"
+                    "Possible causes:\n"
+                    "  • Wrong DC Server IP\n"
+                    "  • LDAP port 389 is blocked by firewall\n"
+                    "  • Domain controller is offline"))
+                return
+
+            self._append_output(f"Port 389 open on {target}, querying OUs...")
+            args = ["-DomainName", domain, "-Username", username]
+            if server_ip:
+                args.extend(["-ServerIP", server_ip])
+
+            rc, out = run_powershell_with_secret("get_ous.ps1", args, password)
+
+            errors = [l for l in out.splitlines() if l.startswith("ERROR")]
+            if rc != 0 or errors:
+                msg = errors[0] if errors else out
+                self.after(0, lambda: self._browse_error(
+                    f"LDAP query failed:\n\n{msg}\n\nCheck credentials and that the account has read access to AD."))
+                return
+
+            ous = [l.strip() for l in out.splitlines() if l.strip() and not l.startswith("ERROR")]
+            if not ous:
+                self.after(0, lambda: self._browse_error("No OUs found in the directory."))
+                return
+
+            self._append_output(f"Found {len(ous)} OUs.")
+            self.after(0, lambda: OUPickerDialog(self, ous, self._on_ou_selected))
+            self.after(0, self._browse_btn_reset)
+
+        threading.Thread(target=fetch, daemon=True).start()
+
+    def _browse_error(self, message: str):
+        self._browse_btn_reset()
+        self._append_output(f"Browse failed: {message.splitlines()[0]}")
+        msgbox.showerror("Browse OUs Failed", message)
+
+    def _browse_btn_reset(self):
+        self._browse_btn.configure(text="Browse...", state="normal")
+
+    def _on_ou_selected(self, ou_path: str):
+        self.ou_entry.delete(0, "end")
+        self.ou_entry.insert(0, ou_path)
+
     def _join_domain(self):
         domain = self.domain_name_entry.get().strip()
+        server_ip = self.dc_ip_entry.get().strip()
         ou = self.ou_entry.get().strip()
         username = self.domain_user_entry.get().strip()
         password = self.domain_pass_entry.get()
@@ -158,15 +263,79 @@ class SystemTab(ctk.CTkFrame):
         self._append_output(f"Joining domain {domain}...")
         log(f"Joining domain {domain} as {username}")
 
-        args = ["-DomainName", domain, "-Username", username, "-Password", password]
+        args = ["-DomainName", domain, "-Username", username]
         if ou:
             args.extend(["-OUPath", ou])
+        if server_ip:
+            args.extend(["-ServerIP", server_ip])
 
         def task():
-            rc, out = run_powershell("join_domain.ps1", args, callback=self._append_output)
+            rc, out = run_powershell_with_secret("join_domain.ps1", args, password,
+                                                  callback=self._append_output)
             if rc == 0:
                 log(f"Joined domain {domain}", "success")
             else:
                 log(f"Domain join failed: {out}", "error")
 
         threading.Thread(target=task, daemon=True).start()
+
+
+class OUPickerDialog(ctk.CTkToplevel):
+    def __init__(self, master, ous: list, on_select):
+        super().__init__(master)
+        self.ous = ous
+        self.on_select = on_select
+
+        self.title("Select OU")
+        self.geometry("560x440")
+        self.resizable(False, True)
+        self.grab_set()
+        self._build()
+        self._center()
+
+    def _center(self):
+        self.update_idletasks()
+        x = self.master.winfo_rootx() + (self.master.winfo_width() - 560) // 2
+        y = self.master.winfo_rooty() + (self.master.winfo_height() - 440) // 2
+        self.geometry(f"+{x}+{y}")
+
+    def _build(self):
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(2, weight=1)
+
+        ctk.CTkLabel(self, text="Select an Organisational Unit",
+                      font=ctk.CTkFont(size=15, weight="bold")).grid(
+            row=0, column=0, padx=20, pady=(20, 8), sticky="w")
+
+        self.search_var = ctk.StringVar()
+        self.search_var.trace_add("write", self._filter)
+        ctk.CTkEntry(self, placeholder_text="Filter OUs...",
+                      textvariable=self.search_var, height=36).grid(
+            row=1, column=0, padx=20, pady=(0, 8), sticky="ew")
+
+        self.scroll = ctk.CTkScrollableFrame(self, height=280)
+        self.scroll.grid(row=2, column=0, padx=20, pady=(0, 8), sticky="nsew")
+        self.scroll.grid_columnconfigure(0, weight=1)
+        self._render_ous(self.ous)
+
+        ctk.CTkButton(self, text="Cancel", width=120, fg_color="transparent",
+                       border_width=1, command=self.destroy).grid(
+            row=3, column=0, padx=20, pady=(0, 20), sticky="e")
+
+    def _render_ous(self, ous):
+        for w in self.scroll.winfo_children():
+            w.destroy()
+        for i, ou in enumerate(ous):
+            ctk.CTkButton(self.scroll, text=ou, anchor="w",
+                           fg_color="transparent", hover_color=("#3a3a3a", "#2a2a2a"),
+                           command=lambda o=ou: self._pick(o)).grid(
+                row=i, column=0, sticky="ew", padx=4, pady=2)
+
+    def _filter(self, *_):
+        term = self.search_var.get().lower()
+        self._render_ous([ou for ou in self.ous if term in ou.lower()])
+
+    def _pick(self, ou: str):
+        self.grab_release()
+        self.destroy()
+        self.on_select(ou)
