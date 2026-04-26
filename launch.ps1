@@ -9,7 +9,7 @@ if ($ScriptDir -like "\\*") {
     Write-Host "Running from: $RunDir"
 }
 
-# Find Python — glob first, then PATH, then registry
+# Find Python - glob first, then PATH, then registry
 $PythonExe = $null
 
 foreach ($pattern in @(

@@ -7,7 +7,7 @@ $PythonExe  = $null
 Write-Host "Building IT Provisioning Tool..."
 Write-Host ""
 
-# Add Defender exclusion immediately — it blocks downloaded exes and the PyInstaller bootloader
+# Add Defender exclusion immediately - it blocks downloaded exes and the PyInstaller bootloader
 New-Item -ItemType Directory -Force -Path $LocalBuild | Out-Null
 Write-Host "Adding Windows Defender exclusion for build directory..."
 try {
@@ -30,7 +30,7 @@ foreach ($cmd in @("py", "python")) {
     } catch {}
 }
 
-# No system Python — download and silently install full Python 3.11
+# No system Python - download and silently install full Python 3.11
 if (-not $PythonExe) {
     Write-Host "No Python found. Downloading full Python 3.11 (~25MB, one-time setup)..."
     $PythonDir       = Join-Path $BuildEnv "python"
@@ -69,7 +69,7 @@ Write-Host ""
 Write-Host "Installing dependencies..."
 & $PythonExe -m pip install -r (Join-Path $ScriptDir "requirements.txt") --quiet
 
-# Copy source to local temp — keeps PyInstaller fully off the UNC path
+# Copy source to local temp - keeps PyInstaller fully off the UNC path
 Write-Host ""
 Write-Host "Copying source to local build directory..."
 $LocalSrc = Join-Path $LocalBuild "src"
@@ -128,4 +128,4 @@ Remove-Item $LocalBuild -Recurse -Force
 
 Write-Host ""
 Write-Host "Build complete: dist\IT-Provisioning-Tool.exe"
-Write-Host "Copy IT-Provisioning-Tool.exe to any machine and run — no Python needed."
+Write-Host "Copy IT-Provisioning-Tool.exe to any machine and run. No Python needed."
