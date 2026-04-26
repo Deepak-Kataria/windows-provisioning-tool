@@ -9,32 +9,19 @@ if ($ScriptDir -like "\\*") {
     Write-Host "Running from: $RunDir"
 }
 
-# Find Python — registry first (survives elevation), then PATH, then known dirs
+# Find Python
 $PythonExe = $null
 
-# 1. Registry (most reliable — works in both normal and elevated context)
-$RegRoots = @(
-    "HKCU:\Software\Python\PythonCore",
-    "HKLM:\Software\Python\PythonCore",
-    "HKLM:\Software\Wow6432Node\Python\PythonCore"
-)
-foreach ($reg in $RegRoots) {
-    if (Test-Path $reg) {
-        foreach ($ver in (Get-ChildItem $reg -ErrorAction SilentlyContinue)) {
-            $ipKey = "$($ver.PSPath)\InstallPath"
-            if (Test-Path $ipKey) {
-                $ip = (Get-ItemProperty $ipKey -ErrorAction SilentlyContinue)
-                $candidate = if ($ip.ExecutablePath) { $ip.ExecutablePath }
-                             elseif ($ip.'(default)') { Join-Path $ip.'(default)' "python.exe" }
-                             else { $null }
-                if ($candidate -and (Test-Path $candidate)) {
-                    $PythonExe = $candidate
-                    break
-                }
-            }
-        }
-    }
-    if ($PythonExe) { break }
+# 1. Direct glob — fastest, works even without registry
+foreach ($pattern in @(
+    "$env:LOCALAPPDATA\Programs\Python\Python3*\python.exe",
+    "$env:LOCALAPPDATA\Programs\Python\python.exe",
+    "C:\Python3*\python.exe",
+    "C:\Program Files\Python3*\python.exe",
+    "C:\Program Files (x86)\Python3*\python.exe"
+)) {
+    $match = Get-Item $pattern -ErrorAction SilentlyContinue | Select-Object -Last 1
+    if ($match) { $PythonExe = $match.FullName; break }
 }
 
 # 2. PATH
@@ -47,36 +34,32 @@ if (-not $PythonExe) {
     }
 }
 
-# 3. Known install dirs
+# 3. Registry fallback
 if (-not $PythonExe) {
-    $KnownDirs = @(
-        (Join-Path $env:LOCALAPPDATA "Programs\Python"),
-        "C:\Python311", "C:\Python312", "C:\Python310",
-        "C:\Program Files\Python311", "C:\Program Files\Python312"
-    )
-    foreach ($dir in $KnownDirs) {
-        $candidate = Join-Path $dir "python.exe"
-        if (Test-Path $candidate) { $PythonExe = $candidate; break }
-        # also check subdirs one level deep (e.g. Programs\Python\Python311\)
-        if (Test-Path $dir) {
-            foreach ($sub in (Get-ChildItem $dir -Directory -ErrorAction SilentlyContinue)) {
-                $candidate = Join-Path $sub.FullName "python.exe"
-                if (Test-Path $candidate) { $PythonExe = $candidate; break }
-            }
+    foreach ($reg in @("HKCU:\Software\Python\PythonCore","HKLM:\Software\Python\PythonCore")) {
+        if (-not (Test-Path $reg)) { continue }
+        foreach ($ver in (Get-ChildItem $reg -ErrorAction SilentlyContinue)) {
+            $ipKey = Join-Path $ver.PSPath "InstallPath"
+            if (-not (Test-Path $ipKey)) { continue }
+            $ip = Get-ItemProperty $ipKey -ErrorAction SilentlyContinue
+            $candidate = if ($ip.ExecutablePath) { $ip.ExecutablePath }
+                         elseif ($ip.'(default)') { Join-Path $ip.'(default)'.TrimEnd('\') "python.exe" }
+                         else { $null }
+            if ($candidate -and (Test-Path $candidate)) { $PythonExe = $candidate; break }
         }
         if ($PythonExe) { break }
     }
 }
 
+Write-Host "Python search result: $PythonExe"
+
 if (-not $PythonExe) {
     Write-Host ""
-    Write-Host "ERROR: Python not found."
-    Write-Host "Install Python from https://python.org and run: pip install -r requirements.txt"
+    Write-Host "ERROR: Python not found. LOCALAPPDATA=$env:LOCALAPPDATA"
+    Write-Host "Install Python from https://python.org then: pip install -r requirements.txt"
     Read-Host "Press Enter to exit"
     exit 1
 }
-
-Write-Host "Python: $PythonExe"
 
 # Check if already admin
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
