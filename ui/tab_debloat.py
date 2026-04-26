@@ -42,16 +42,38 @@ class DebloatTab(ctk.CTkFrame):
         ctk.CTkButton(btn_frame, text="Deselect All", width=110,
                        command=self._deselect_all).grid(row=0, column=1, padx=4)
 
-        # Scrollable app list
-        scroll = ctk.CTkScrollableFrame(self, height=240)
+        # Scrollable app list grouped by category
+        scroll = ctk.CTkScrollableFrame(self, height=300)
         scroll.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
         scroll.grid_columnconfigure(0, weight=1)
+        scroll.grid_columnconfigure(1, weight=1)
+        scroll.grid_columnconfigure(2, weight=1)
 
-        for i, app in enumerate(self.debloat_data["appx_packages"]):
-            var = ctk.BooleanVar(value=True)
-            cb = ctk.CTkCheckBox(scroll, text=app["name"], variable=var)
-            cb.grid(row=i, column=0, sticky="w", padx=10, pady=4)
-            self.checkboxes[app["package"]] = var
+        # Group apps by category
+        from collections import defaultdict
+        grouped = defaultdict(list)
+        for app in self.debloat_data["appx_packages"]:
+            grouped[app.get("category", "Other")].append(app)
+
+        row = 0
+        for category, apps in grouped.items():
+            ctk.CTkLabel(scroll, text=category,
+                          font=ctk.CTkFont(size=12, weight="bold"),
+                          text_color="#4FC3F7").grid(
+                row=row, column=0, columnspan=3, sticky="w", padx=8, pady=(10, 2))
+            row += 1
+            col = 0
+            for app in apps:
+                var = ctk.BooleanVar(value=True)
+                ctk.CTkCheckBox(scroll, text=app["name"], variable=var).grid(
+                    row=row, column=col, sticky="w", padx=8, pady=2)
+                self.checkboxes[app["package"]] = var
+                col += 1
+                if col == 3:
+                    col = 0
+                    row += 1
+            if col != 0:
+                row += 1
 
         self.remove_btn = ctk.CTkButton(self, text="Remove Selected Apps",
                                          fg_color="#E53935", hover_color="#B71C1C",
