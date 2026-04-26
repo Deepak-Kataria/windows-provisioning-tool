@@ -1,7 +1,7 @@
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RunDir    = $ScriptDir
 
-# If on a UNC path, copy source to local temp — cmd elevation breaks on UNC
+# If on a UNC path, copy source to local temp
 if ($ScriptDir -like "\\*") {
     Write-Host "Network share detected. Copying to local temp..."
     $RunDir = Join-Path $env:TEMP "IT-Provisioning-Tool-src"
@@ -9,10 +9,9 @@ if ($ScriptDir -like "\\*") {
     Write-Host "Running from: $RunDir"
 }
 
-# Find Python
+# Find Python — glob first, then PATH, then registry
 $PythonExe = $null
 
-# 1. Direct glob — fastest, works even without registry
 foreach ($pattern in @(
     "$env:LOCALAPPDATA\Programs\Python\Python3*\python.exe",
     "$env:LOCALAPPDATA\Programs\Python\python.exe",
@@ -24,7 +23,6 @@ foreach ($pattern in @(
     if ($match) { $PythonExe = $match.FullName; break }
 }
 
-# 2. PATH
 if (-not $PythonExe) {
     foreach ($cmd in @("python", "py")) {
         try {
@@ -34,9 +32,8 @@ if (-not $PythonExe) {
     }
 }
 
-# 3. Registry fallback
 if (-not $PythonExe) {
-    foreach ($reg in @("HKCU:\Software\Python\PythonCore","HKLM:\Software\Python\PythonCore")) {
+    foreach ($reg in @("HKCU:\Software\Python\PythonCore", "HKLM:\Software\Python\PythonCore")) {
         if (-not (Test-Path $reg)) { continue }
         foreach ($ver in (Get-ChildItem $reg -ErrorAction SilentlyContinue)) {
             $ipKey = Join-Path $ver.PSPath "InstallPath"
@@ -51,38 +48,33 @@ if (-not $PythonExe) {
     }
 }
 
-Write-Host "Python search result: $PythonExe"
+Write-Host "Python: $PythonExe"
 
 if (-not $PythonExe) {
     Write-Host ""
     Write-Host "ERROR: Python not found. LOCALAPPDATA=$env:LOCALAPPDATA"
-    Write-Host "Install Python from https://python.org then: pip install -r requirements.txt"
+    Write-Host "Install Python from https://python.org"
     Read-Host "Press Enter to exit"
     exit 1
 }
 
-# Check if already admin
+# Elevate if not admin
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator)
 
 if (-not $isAdmin) {
-    # Relaunch elevated
     Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
     exit
 }
 
-# Install / update dependencies
+# Install dependencies
 $ReqFile = Join-Path $RunDir "requirements.txt"
 if (Test-Path $ReqFile) {
     Write-Host "Installing dependencies..."
     & $PythonExe -m pip install -r $ReqFile --quiet --disable-pip-version-check
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "WARNING: pip install returned errors — attempting to run anyway."
-    } else {
-        Write-Host "Dependencies OK."
-    }
+    Write-Host "Done."
 }
 
-# Run the tool
+# Launch
 Set-Location $RunDir
 & $PythonExe main.py
