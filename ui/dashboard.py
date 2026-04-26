@@ -6,6 +6,8 @@ from ui.tab_apps import AppsTab
 from ui.tab_org_settings import OrgSettingsTab
 from ui.tab_users import UsersTab
 
+APP_VERSION = "v1.2.0"
+
 
 class Dashboard(ctk.CTkFrame):
     def __init__(self, master, username, role, display_name, on_logout):
@@ -25,9 +27,14 @@ class Dashboard(ctk.CTkFrame):
         topbar.grid(row=0, column=0, sticky="ew")
         topbar.grid_columnconfigure(1, weight=1)
 
-        ctk.CTkLabel(topbar, text="IT Provisioning Tool",
+        title_frame = ctk.CTkFrame(topbar, fg_color="transparent")
+        title_frame.grid(row=0, column=0, padx=20, pady=8, sticky="w")
+        ctk.CTkLabel(title_frame, text="IT Provisioning Tool",
                       font=ctk.CTkFont(size=18, weight="bold")).grid(
-            row=0, column=0, padx=20, pady=14, sticky="w")
+            row=0, column=0, sticky="w")
+        ctk.CTkLabel(title_frame, text=APP_VERSION,
+                      font=ctk.CTkFont(size=11),
+                      text_color="gray").grid(row=0, column=1, padx=(8, 0), sticky="w")
 
         role_badge = "ADMIN" if self.role == "admin" else "USER"
         badge_color = "#4CAF50" if self.role == "admin" else "#2196F3"
