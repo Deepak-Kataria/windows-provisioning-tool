@@ -6,9 +6,31 @@ All versions tagged in git. Rollback: `git checkout v<version>`
 
 ## [Unreleased] — In Progress
 
+---
+
+## [v1.2.0] - 2026-04-26
+
 ### Added
 - System tab: hardware-based auto-generate computer name (motherboard serial → SHA256 → 8-char ID)
 - `scripts/get_hardware_id.ps1` — reads mobo serial, falls back to BIOS UUID
+- All tabs: rollback / restore section — undo telemetry, org settings, and app installs
+- All tabs: live progress bars with per-item status labels and completion summary dialog
+- Apps tab: uninstall / rollback card — lists all common + team apps, uninstalls via winget
+- `modules/paths.py` — PyInstaller-aware `get_base_dir()` for frozen builds
+- `build.bat` / `build.ps1` — full standalone build pipeline (auto-downloads Python if needed, adds Defender exclusion, bundles all DLLs)
+- `run.bat` — smart launcher that copies dist to local temp before running (required for network share DLL loading)
+- `README.md` — project documentation
+
+### Fixed
+- `main.py`: UNC self-rescue — exe detects network share path and relaunches from local temp automatically
+- `build.ps1`: bcrypt (`_bcrypt.pyd`) and cffi (`_cffi_backend.pyd`) now correctly bundled — `--hidden-import` + manual post-build copy
+- `modules/runner.py`: UNC path workaround for PowerShell scripts
+- `requirements.txt`: added `bcrypt>=4.0.0` (was missing from build deps)
+
+### Changed
+- `disable_telemetry.ps1`: accepts `-Mode disable/restore` — enables per-item rollback
+- `apply_org_settings.ps1`: accepts `-Mode apply/restore` — enables per-item rollback
+- `modules/runner.py`: added `run_winget_uninstall`, `run_inline_powershell`
 
 ---
 
