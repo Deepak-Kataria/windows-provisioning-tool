@@ -89,20 +89,20 @@ class Dashboard(ctk.CTkFrame):
         try:
             with open(changelog_path, encoding="utf-8") as f:
                 content = f.read()
-        except FileNotFoundError:
-            content = "CHANGELOG.md not found."
+        except Exception as e:
+            content = f"Could not load CHANGELOG.md\nPath: {changelog_path}\nError: {e}"
 
         dialog = ctk.CTkToplevel(self)
-        dialog.title(f"Changelog - {APP_VERSION}")
-        dialog.geometry("680x540")
+        dialog.title(f"Changelog  {APP_VERSION}")
+        dialog.geometry("700x560")
         dialog.resizable(True, True)
-        dialog.grab_set()
-        dialog.lift()
-        dialog.focus_force()
         dialog.grid_rowconfigure(0, weight=1)
         dialog.grid_columnconfigure(0, weight=1)
+        dialog.after(100, dialog.lift)
+        dialog.after(150, dialog.focus_force)
 
-        box = ctk.CTkTextbox(dialog, wrap="word", font=ctk.CTkFont(family="Courier New", size=12))
+        box = ctk.CTkTextbox(dialog, wrap="word",
+                              font=ctk.CTkFont(family="Courier New", size=12))
         box.grid(row=0, column=0, padx=16, pady=(16, 8), sticky="nsew")
         box.insert("1.0", content)
         box.configure(state="disabled")
