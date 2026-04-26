@@ -150,7 +150,7 @@ class TelemetryTab(ctk.CTkFrame):
         flag_map = {opt[0]: opt[4] for opt in TELEMETRY_OPTIONS}
         args = ["-Mode", mode]
         for key, flag in flag_map.items():
-            val = "$true" if var_dict[key].get() else "$false"
+            val = "1" if var_dict[key].get() else "0"
             args.extend([flag, val])
         return args
 
