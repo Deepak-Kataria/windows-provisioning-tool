@@ -13,6 +13,7 @@ class DebloatTab(ctk.CTkFrame):
         super().__init__(master, fg_color="transparent")
         self.role = role
         self.checkboxes = {}
+        self._running = False
         self._load_config()
         self._build()
 
@@ -42,7 +43,7 @@ class DebloatTab(ctk.CTkFrame):
                        command=self._deselect_all).grid(row=0, column=1, padx=4)
 
         # Scrollable app list
-        scroll = ctk.CTkScrollableFrame(self, height=280)
+        scroll = ctk.CTkScrollableFrame(self, height=240)
         scroll.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
         scroll.grid_columnconfigure(0, weight=1)
 
@@ -52,16 +53,29 @@ class DebloatTab(ctk.CTkFrame):
             cb.grid(row=i, column=0, sticky="w", padx=10, pady=4)
             self.checkboxes[app["package"]] = var
 
-        remove_btn = ctk.CTkButton(self, text="Remove Selected Apps",
-                                    fg_color="#E53935", hover_color="#B71C1C",
-                                    command=self._remove_apps)
-        remove_btn.grid(row=2, column=0, padx=20, pady=(0, 8), sticky="w")
+        self.remove_btn = ctk.CTkButton(self, text="Remove Selected Apps",
+                                         fg_color="#E53935", hover_color="#B71C1C",
+                                         command=self._remove_apps)
+        self.remove_btn.grid(row=2, column=0, padx=20, pady=(0, 8), sticky="w")
+
+        # Progress area
+        progress_frame = ctk.CTkFrame(self, fg_color="transparent")
+        progress_frame.grid(row=3, column=0, padx=20, pady=(0, 4), sticky="ew")
+        progress_frame.grid_columnconfigure(0, weight=1)
+
+        self.progress_bar = ctk.CTkProgressBar(progress_frame, height=14)
+        self.progress_bar.grid(row=0, column=0, sticky="ew", padx=(0, 8))
+        self.progress_bar.set(0)
+
+        self.progress_label = ctk.CTkLabel(progress_frame, text="", width=140,
+                                            font=ctk.CTkFont(size=11), anchor="w")
+        self.progress_label.grid(row=1, column=0, sticky="w", pady=(2, 0))
 
         ctk.CTkLabel(self, text="Output",
                       font=ctk.CTkFont(size=14, weight="bold")).grid(
-            row=3, column=0, padx=20, pady=(8, 4), sticky="w")
+            row=4, column=0, padx=20, pady=(8, 4), sticky="w")
         self.output_box = ctk.CTkTextbox(self, height=130, state="disabled")
-        self.output_box.grid(row=4, column=0, padx=20, pady=(0, 20), sticky="ew")
+        self.output_box.grid(row=5, column=0, padx=20, pady=(0, 20), sticky="ew")
 
     def _select_all(self):
         for var in self.checkboxes.values():
@@ -77,19 +91,82 @@ class DebloatTab(ctk.CTkFrame):
         self.output_box.see("end")
         self.output_box.configure(state="disabled")
 
+    def _set_progress(self, done, total):
+        frac = done / total if total else 0
+        self.progress_bar.set(frac)
+        self.progress_label.configure(text=f"Processing {done} / {total}")
+
+    def _show_done_dialog(self, removed, not_found, errors, total):
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Debloat Complete")
+        dialog.geometry("360x200")
+        dialog.resizable(False, False)
+        dialog.grab_set()
+        dialog.lift()
+        dialog.focus_force()
+
+        ctk.CTkLabel(dialog, text="Debloat Complete",
+                      font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(24, 8))
+
+        summary = (
+            f"Removed:    {removed}\n"
+            f"Not found:  {not_found}\n"
+            f"Errors:     {errors}\n"
+            f"Total:      {total}"
+        )
+        ctk.CTkLabel(dialog, text=summary, font=ctk.CTkFont(size=13),
+                      justify="left").pack(pady=(0, 16))
+
+        ctk.CTkButton(dialog, text="OK", width=100,
+                       command=dialog.destroy).pack()
+
     def _remove_apps(self):
+        if self._running:
+            return
         selected = [pkg for pkg, var in self.checkboxes.items() if var.get()]
         if not selected:
             self._append_output("No apps selected.")
             return
 
+        self._running = True
+        self.remove_btn.configure(state="disabled", text="Running...")
+        self.progress_bar.set(0)
+        self.progress_label.configure(text=f"Starting {len(selected)} apps...")
         self._append_output(f"Removing {len(selected)} apps...")
         log(f"Debloat: removing {len(selected)} apps")
 
+        total = len(selected)
+        counts = {"removed": 0, "not_found": 0, "errors": 0, "done": 0}
+
+        def on_line(line):
+            if line.startswith("REMOVED:"):
+                counts["removed"] += 1
+                counts["done"] += 1
+            elif line.startswith("NOT_FOUND:"):
+                counts["not_found"] += 1
+                counts["done"] += 1
+            elif line.startswith("ERROR:"):
+                counts["errors"] += 1
+                counts["done"] += 1
+
+            self.after(0, self._append_output, line)
+            self.after(0, self._set_progress, counts["done"], total)
+
         def task():
-            rc, out = run_powershell("debloat.ps1",
-                                      ["-Packages", ",".join(selected)],
-                                      callback=self._append_output)
-            log(f"Debloat complete. Return code: {rc}")
+            rc, _ = run_powershell("debloat.ps1",
+                                    ["-Packages", ",".join(selected)],
+                                    callback=on_line)
+            log(f"Debloat complete. rc={rc} removed={counts['removed']} "
+                f"not_found={counts['not_found']} errors={counts['errors']}")
+
+            def finish():
+                self.progress_bar.set(1.0)
+                self.progress_label.configure(text="Done.")
+                self.remove_btn.configure(state="normal", text="Remove Selected Apps")
+                self._running = False
+                self._show_done_dialog(counts["removed"], counts["not_found"],
+                                        counts["errors"], total)
+
+            self.after(0, finish)
 
         threading.Thread(target=task, daemon=True).start()

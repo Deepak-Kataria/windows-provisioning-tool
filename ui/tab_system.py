@@ -54,12 +54,17 @@ class SystemTab(ctk.CTkFrame):
         self.prefix_entry.grid(row=2, column=1, columnspan=2, padx=8, pady=8, sticky="w")
         self.prefix_entry.bind("<KeyRelease>", lambda e: self._update_preview())
 
-        ctk.CTkLabel(rename_frame, text="Number:").grid(
+        ctk.CTkLabel(rename_frame, text="Number / ID:").grid(
             row=3, column=0, padx=20, pady=8, sticky="w")
-        self.number_entry = ctk.CTkEntry(rename_frame, width=100,
+        number_row = ctk.CTkFrame(rename_frame, fg_color="transparent")
+        number_row.grid(row=3, column=1, columnspan=2, padx=8, pady=8, sticky="w")
+        self.number_entry = ctk.CTkEntry(number_row, width=120,
                                           placeholder_text="e.g. 001")
-        self.number_entry.grid(row=3, column=1, columnspan=2, padx=8, pady=8, sticky="w")
+        self.number_entry.grid(row=0, column=0)
         self.number_entry.bind("<KeyRelease>", lambda e: self._update_preview())
+        self._autogen_btn = ctk.CTkButton(number_row, text="Auto-Generate from Hardware",
+                                           width=200, command=self._auto_generate_name)
+        self._autogen_btn.grid(row=0, column=1, padx=(10, 0))
 
         ctk.CTkLabel(rename_frame, text="Preview:").grid(
             row=4, column=0, padx=20, pady=8, sticky="w")
@@ -141,6 +146,29 @@ class SystemTab(ctk.CTkFrame):
         self.output_box = ctk.CTkTextbox(self, height=140, state="disabled")
         self.output_box.grid(row=3, column=0, padx=20, pady=(0, 20), sticky="ew")
 
+    def _auto_generate_name(self):
+        self._autogen_btn.configure(text="Reading hardware...", state="disabled")
+
+        def task():
+            rc, out = run_powershell("get_hardware_id.ps1", [], callback=None)
+            hw_id = out.strip().splitlines()[-1].strip() if out.strip() else ""
+
+            def apply():
+                self._autogen_btn.configure(text="Auto-Generate from Hardware", state="normal")
+                if rc != 0 or hw_id.startswith("ERROR") or not hw_id:
+                    msg = hw_id if hw_id else "Unknown error reading hardware ID."
+                    self._append_output(f"Auto-generate failed: {msg}")
+                    msgbox.showerror("Hardware ID Error", msg)
+                    return
+                self.number_entry.delete(0, "end")
+                self.number_entry.insert(0, hw_id)
+                self._update_preview()
+                self._append_output(f"Hardware ID generated: {hw_id}")
+
+            self.after(0, apply)
+
+        threading.Thread(target=task, daemon=True).start()
+
     def _update_preview(self):
         prefix = self.prefix_entry.get().strip().upper()
         number = self.number_entry.get().strip().zfill(3)
@@ -155,6 +183,9 @@ class SystemTab(ctk.CTkFrame):
         self.output_box.insert("end", text + "\n")
         self.output_box.see("end")
         self.output_box.configure(state="disabled")
+
+    def _safe_append(self, text):
+        self.after(0, self._append_output, text)
 
     def _apply_rename(self):
         prefix = self.prefix_entry.get().strip().upper()
@@ -171,7 +202,7 @@ class SystemTab(ctk.CTkFrame):
 
         def task():
             rc, out = run_powershell("rename_computer.ps1", ["-NewName", new_name],
-                                      callback=self._append_output)
+                                      callback=self._safe_append)
             if rc == 0:
                 log(f"Computer renamed to {new_name}", "success")
             else:
@@ -271,7 +302,7 @@ class SystemTab(ctk.CTkFrame):
 
         def task():
             rc, out = run_powershell_with_secret("join_domain.ps1", args, password,
-                                                  callback=self._append_output)
+                                                  callback=self._safe_append)
             if rc == 0:
                 log(f"Joined domain {domain}", "success")
             else:

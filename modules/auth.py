@@ -1,8 +1,9 @@
 import json
 import os
 import bcrypt
+from modules.paths import get_base_dir
 
-CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "credentials.json")
+CONFIG_PATH = os.path.join(get_base_dir(), "config", "credentials.json")
 
 _DEFAULT_CREDENTIALS = {
     "users": [

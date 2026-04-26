@@ -1,3 +1,15 @@
+import sys
+import os
+
+# .pyd extensions (bcrypt, etc.) cannot load from UNC paths — relaunch from local temp
+if getattr(sys, 'frozen', False) and sys.executable.startswith('\\\\'):
+    import shutil, subprocess, tempfile
+    _src = os.path.dirname(sys.executable)
+    _dst = os.path.join(tempfile.gettempdir(), 'IT-Provisioning-Tool-run')
+    shutil.copytree(_src, _dst, dirs_exist_ok=True)
+    subprocess.Popen([os.path.join(_dst, os.path.basename(sys.executable))])
+    sys.exit(0)
+
 import customtkinter as ctk
 from ui.login_screen import LoginScreen
 from ui.dashboard import Dashboard

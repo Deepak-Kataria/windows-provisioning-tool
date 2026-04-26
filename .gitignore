@@ -7,3 +7,7 @@ build/
 logs/
 .env
 config/credentials.json
+_build_env/
+.claude/
+*logs*.txt
+*logs*.doc

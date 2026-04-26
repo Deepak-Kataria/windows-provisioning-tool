@@ -6,7 +6,8 @@
             "key": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU",
             "value_name": "NoAutoRebootWithLoggedOnUsers",
             "value_data": 1,
-            "value_type": "DWORD"
+            "value_type": "DWORD",
+            "rollback_delete": true
         },
         {
             "name": "Disable Consumer Features",
@@ -14,7 +15,8 @@
             "key": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent",
             "value_name": "DisableWindowsConsumerFeatures",
             "value_data": 1,
-            "value_type": "DWORD"
+            "value_type": "DWORD",
+            "rollback_delete": true
         },
         {
             "name": "Disable Lock Screen Ads",
@@ -22,7 +24,9 @@
             "key": "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
             "value_name": "RotatingLockScreenOverlayEnabled",
             "value_data": 0,
-            "value_type": "DWORD"
+            "value_type": "DWORD",
+            "rollback_data": 1,
+            "rollback_delete": false
         },
         {
             "name": "Show File Extensions",
@@ -30,7 +34,9 @@
             "key": "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
             "value_name": "HideFileExt",
             "value_data": 0,
-            "value_type": "DWORD"
+            "value_type": "DWORD",
+            "rollback_data": 1,
+            "rollback_delete": false
         },
         {
             "name": "Disable Startup Programs Delay",
@@ -38,7 +44,8 @@
             "key": "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Serialize",
             "value_name": "StartupDelayInMSec",
             "value_data": 0,
-            "value_type": "DWORD"
+            "value_type": "DWORD",
+            "rollback_delete": true
         }
     ]
 }
