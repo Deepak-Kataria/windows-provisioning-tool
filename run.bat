@@ -1,23 +1,19 @@
 @echo off
 setlocal
+pushd "%~dp0"
 
-set "EXE=%~dp0dist\IT-Provisioning-Tool.exe"
+REM ── Dev mode: run directly from source (no build needed) ──────────
+REM When ready to ship, run build.bat and distribute dist\IT-Provisioning-Tool.exe
 
-if exist "%EXE%" (
-    start "" "%EXE%"
-    exit /b
-)
-
-REM No built exe — run from source (dev mode)
 net session >nul 2>&1
 if %errorLevel% neq 0 (
-    powershell -Command "Start-Process cmd -ArgumentList '/c pushd ""%~dp0"" && python main.py && pause' -Verb RunAs"
+    powershell -Command "Start-Process cmd -ArgumentList '/c cd /d ""%~dp0"" && python main.py && pause' -Verb RunAs"
+    popd
     exit /b
 )
 
 where python >nul 2>&1
 if %errorLevel% equ 0 (
-    pushd "%~dp0"
     python main.py
     popd
     pause
@@ -26,12 +22,13 @@ if %errorLevel% equ 0 (
 
 where py >nul 2>&1
 if %errorLevel% equ 0 (
-    pushd "%~dp0"
     py main.py
     popd
     pause
     exit /b
 )
 
-echo ERROR: Python not found. Run build.bat first to create a standalone exe.
+echo ERROR: Python not found.
+echo Install Python from https://python.org and run: pip install -r requirements.txt
+popd
 pause
