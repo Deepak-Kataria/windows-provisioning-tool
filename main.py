@@ -11,10 +11,14 @@ if getattr(sys, 'frozen', False) and sys.executable.startswith('\\\\'):
     sys.exit(0)
 
 import customtkinter as ctk
-from ui.login_screen import LoginScreen
 from ui.dashboard import Dashboard
-from ui.first_run_dialog import FirstRunDialog
-from modules.auth import is_first_run
+
+# AUTH_ENABLED = False — login bypassed during development.
+# To restore: set True and uncomment the login imports below.
+AUTH_ENABLED = False
+# from ui.login_screen import LoginScreen
+# from ui.first_run_dialog import FirstRunDialog
+# from modules.auth import is_first_run
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -28,24 +32,12 @@ class App(ctk.CTk):
         self.minsize(860, 600)
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
-        self._show_login()
-
-    def _show_login(self):
-        self._clear()
-        login = LoginScreen(self, on_login_success=self._on_login)
-        login.grid(row=0, column=0, sticky="nsew")
-
-    def _on_login(self, username, role, display_name):
-        if is_first_run(username):
-            FirstRunDialog(self, username,
-                           on_complete=lambda: self._show_dashboard(username, role, display_name))
-        else:
-            self._show_dashboard(username, role, display_name)
+        self._show_dashboard("admin", "admin", "Administrator")
 
     def _show_dashboard(self, username, role, display_name):
         self._clear()
         dashboard = Dashboard(self, username, role, display_name,
-                               on_logout=self._show_login)
+                               on_logout=self.destroy)
         dashboard.grid(row=0, column=0, sticky="nsew")
 
     def _clear(self):

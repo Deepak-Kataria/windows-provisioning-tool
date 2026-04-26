@@ -82,17 +82,22 @@ $LocalDist = Join-Path $LocalBuild "dist"
 $LocalWork = Join-Path $LocalBuild "work"
 
 Write-Host ""
-Write-Host "Locating bcrypt package..."
-$BcryptDir = (& $PythonExe -c "import os,bcrypt; print(os.path.dirname(bcrypt.__file__))").Trim()
-Write-Host "  bcrypt at: $BcryptDir"
+Write-Host "Locating bcrypt and cffi packages..."
+$BcryptDir   = (& $PythonExe -c "import os,bcrypt; print(os.path.dirname(bcrypt.__file__))").Trim()
+$CffiBackend = (& $PythonExe -c "import os,_cffi_backend; print(os.path.abspath(_cffi_backend.__file__))").Trim()
+Write-Host "  bcrypt      : $BcryptDir"
+Write-Host "  _cffi_backend: $CffiBackend"
 
 Write-Host ""
 Write-Host "Running PyInstaller (building locally)..."
-& $PythonExe -m PyInstaller --noconfirm --onedir --windowed --uac-admin `
+& $PythonExe -m PyInstaller --noconfirm --onefile --windowed --uac-admin `
     --name "IT-Provisioning-Tool" `
     --collect-data customtkinter `
     --hidden-import bcrypt `
     --hidden-import _cffi_backend `
+    "--add-binary=${BcryptDir}\_bcrypt.pyd;bcrypt" `
+    "--add-data=${BcryptDir}\__init__.py;bcrypt" `
+    "--add-binary=${CffiBackend};." `
     "--add-data=$LocalSrc\config;config" `
     "--add-data=$LocalSrc\scripts;scripts" `
     --distpath $LocalDist `
@@ -111,14 +116,6 @@ if (-not $buildOk) {
     exit 1
 }
 
-# Manually copy bcrypt — PyInstaller misses _bcrypt.pyd (no platform tag in filename)
-Write-Host ""
-Write-Host "Copying bcrypt package into dist..."
-$BcryptDst = Join-Path $LocalDist "IT-Provisioning-Tool\_internal\bcrypt"
-New-Item -ItemType Directory -Force -Path $BcryptDst | Out-Null
-Copy-Item -Path (Join-Path $BcryptDir "*") -Destination $BcryptDst -Recurse -Force -Exclude "__pycache__"
-Write-Host "  Done."
-
 # Copy output back to project dist folder
 Write-Host ""
 Write-Host "Copying output back..."
@@ -130,5 +127,5 @@ Copy-Item -Path $LocalDist -Destination $FinalDist -Recurse
 Remove-Item $LocalBuild -Recurse -Force
 
 Write-Host ""
-Write-Host "Build complete: dist\IT-Provisioning-Tool\IT-Provisioning-Tool.exe"
-Write-Host "Copy the entire dist\IT-Provisioning-Tool\ folder to target machines."
+Write-Host "Build complete: dist\IT-Provisioning-Tool.exe"
+Write-Host "Copy IT-Provisioning-Tool.exe to any machine and run — no Python needed."

@@ -55,10 +55,10 @@ build.bat
 This will:
 1. Find or download Python 3.11
 2. Install dependencies from `requirements.txt`
-3. Build with PyInstaller into `dist\IT-Provisioning-Tool\`
-4. Bundle all required DLLs (including bcrypt)
+3. Build with PyInstaller into `dist\IT-Provisioning-Tool.exe` (single file)
+4. Bundle all required DLLs (bcrypt, cffi, customtkinter, etc.)
 
-Copy the entire `dist\IT-Provisioning-Tool\` folder to target machines.
+Copy `dist\IT-Provisioning-Tool.exe` to any machine and run — no Python or dependencies needed.
 
 ### Run from source (dev)
 
@@ -69,13 +69,11 @@ python main.py
 
 ---
 
-## Default Login
+## Authentication
 
-| Username | Password | Role |
-|----------|----------|------|
-| `admin`  | `admin`  | Administrator |
+Auth is currently disabled during development — the tool opens directly to the dashboard as admin.
 
-You will be prompted to change the password on first login.
+To re-enable: set `AUTH_ENABLED = True` in `main.py` and uncomment the login imports.
 
 ---
 
