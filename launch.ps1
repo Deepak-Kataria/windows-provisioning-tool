@@ -1,7 +1,20 @@
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$RunDir    = $ScriptDir
 
-# If on a UNC path, copy source to local temp
+# ── MODE 1: Run built exe (preferred - no Python needed) ──────────────────
+# --onefile exe self-extracts to local temp, so UNC path is fine.
+$ExePath = Join-Path $ScriptDir "dist\IT-Provisioning-Tool.exe"
+if (Test-Path $ExePath) {
+    Write-Host "Launching IT-Provisioning-Tool.exe..."
+    Start-Process $ExePath
+    exit
+}
+
+# ── MODE 2: Dev mode - run from source (requires Python) ──────────────────
+Write-Host "No built exe found. Running from source (dev mode)..."
+
+$RunDir = $ScriptDir
+
+# If on UNC, copy source to local temp - cmd elevation breaks on UNC
 if ($ScriptDir -like "\\*") {
     Write-Host "Network share detected. Copying to local temp..."
     $RunDir = Join-Path $env:TEMP "IT-Provisioning-Tool-src"
@@ -52,8 +65,9 @@ Write-Host "Python: $PythonExe"
 
 if (-not $PythonExe) {
     Write-Host ""
-    Write-Host "ERROR: Python not found. LOCALAPPDATA=$env:LOCALAPPDATA"
-    Write-Host "Install Python from https://python.org"
+    Write-Host "ERROR: No built exe and no Python found."
+    Write-Host "Option 1: Run build.bat to create the standalone exe."
+    Write-Host "Option 2: Install Python from https://python.org"
     Read-Host "Press Enter to exit"
     exit 1
 }
@@ -75,6 +89,6 @@ if (Test-Path $ReqFile) {
     Write-Host "Done."
 }
 
-# Launch
+# Launch from source
 Set-Location $RunDir
 & $PythonExe main.py
