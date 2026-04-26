@@ -42,10 +42,10 @@ if (-not $PythonExe) {
     Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe" `
         -OutFile $PythonInstaller -UseBasicParsing
 
-    Write-Host "  Installing Python silently..."
+    Write-Host "  Installing Python silently (per-user)..."
     $installArgs = @(
         "/quiet",
-        "InstallAllUsers=1",
+        "InstallAllUsers=0",
         "TargetDir=$PythonDir",
         "PrependPath=0",
         "Include_launcher=0",
@@ -55,8 +55,9 @@ if (-not $PythonExe) {
     $proc = Start-Process -FilePath $PythonInstaller -ArgumentList $installArgs -Wait -PassThru
     Write-Host "  Installer exit code: $($proc.ExitCode)"
 
-    if (-not (Test-Path (Join-Path $PythonDir "python.exe"))) {
-        Write-Host "ERROR: Python installation failed (exit code $($proc.ExitCode))."
+    $pythonBin = Join-Path $PythonDir "python.exe"
+    if (-not (Test-Path $pythonBin)) {
+        Write-Host "ERROR: Python not found at $pythonBin after install (exit $($proc.ExitCode))."
         try { Remove-MpPreference -ExclusionPath $LocalBuild -ErrorAction SilentlyContinue } catch {}
         exit 1
     }
