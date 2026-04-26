@@ -71,6 +71,18 @@ if (-not $isAdmin) {
     exit
 }
 
+# Install / update dependencies
+$ReqFile = Join-Path $RunDir "requirements.txt"
+if (Test-Path $ReqFile) {
+    Write-Host "Installing dependencies..."
+    & $PythonExe -m pip install -r $ReqFile --quiet --disable-pip-version-check
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "WARNING: pip install returned errors — attempting to run anyway."
+    } else {
+        Write-Host "Dependencies OK."
+    }
+}
+
 # Run the tool
 Set-Location $RunDir
 & $PythonExe main.py
