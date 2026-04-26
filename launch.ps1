@@ -9,8 +9,10 @@ if ($ScriptDir -like "\\*") {
     Write-Host "Running from: $RunDir"
 }
 
-# Find Python
+# Find Python — check PATH first, then common install locations
+# (elevated processes lose user-level PATH entries)
 $PythonExe = $null
+
 foreach ($cmd in @("python", "py")) {
     try {
         $ver = & $cmd --version 2>&1
@@ -19,6 +21,27 @@ foreach ($cmd in @("python", "py")) {
             break
         }
     } catch {}
+}
+
+if (-not $PythonExe) {
+    $SearchRoots = @(
+        $env:LOCALAPPDATA,
+        $env:APPDATA,
+        "C:\",
+        "C:\Program Files",
+        "C:\Program Files (x86)"
+    )
+    $Candidates = @()
+    foreach ($root in $SearchRoots) {
+        if ($root) {
+            $Candidates += Get-ChildItem -Path $root -Filter "python.exe" -Recurse -Depth 5 `
+                -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch "WindowsApps" }
+        }
+    }
+    if ($Candidates.Count -gt 0) {
+        $PythonExe = $Candidates[0].FullName
+        Write-Host "Found Python at: $PythonExe"
+    }
 }
 
 if (-not $PythonExe) {
