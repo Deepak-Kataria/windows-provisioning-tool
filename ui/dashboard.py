@@ -6,7 +6,7 @@ from ui.tab_apps import AppsTab
 from ui.tab_org_settings import OrgSettingsTab
 from ui.tab_users import UsersTab
 
-APP_VERSION = "v1.2.0"
+APP_VERSION = "v1.3.0"
 
 
 class Dashboard(ctk.CTkFrame):

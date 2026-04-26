@@ -1,6 +1,5 @@
 @echo off
-REM ── DEV ONLY — requires Python installed ─────────────────────────────────
-REM For deployment: run build.bat to produce dist\IT-Provisioning-Tool.exe
-REM That exe is fully self-contained — no Python or other installs needed.
-REM ─────────────────────────────────────────────────────────────────────────
+REM ── DEV MODE — runs app directly from source (requires Python) ────────────
+REM    Handles UNC share, auto-installs pip dependencies, elevates to admin.
+REM ── FOR DEPLOYMENT: run build.bat to produce a standalone exe ─────────────
 powershell -ExecutionPolicy Bypass -File "%~dp0launch.ps1"

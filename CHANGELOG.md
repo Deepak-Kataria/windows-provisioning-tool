@@ -8,6 +8,27 @@ All versions tagged in git. Rollback: `git checkout v<version>`
 
 ---
 
+## [v1.3.0] - 2026-04-26
+
+### Added
+- Debloat tab: expanded to 57 packages across 7 categories (Gaming, Bing Apps, Microsoft Apps, Windows Built-in, Communication, Entertainment, Third-party)
+- Debloat tab: rollback / reinstall section — reinstalls removed apps via winget msstore
+- Debloat tab: category headers with 3-column grouped checkbox layout
+- Version number displayed in title bar (`APP_VERSION` in `ui/dashboard.py`)
+- `scripts/reinstall_apps.ps1` — reinstalls via winget, falls back to default source
+
+### Fixed
+- Telemetry tab: PowerShell `[bool]` params now passed as `1`/`0` instead of `$true`/`$false` — fixes "0 of 6 applied" bug
+- `debloat.ps1`: wildcard support + deprovisioning (prevents apps reinstalling for new users)
+- `launch.ps1`: auto `pip install -r requirements.txt` before launching in dev mode
+- `run.bat` / `build.bat`: consistent structure, matching comments, same UNC-safe pattern
+
+### Changed
+- `build.bat`: simplified to match `run.bat` pattern — single PowerShell call, clear comments
+- `run.bat`: updated comments to clarify dev-only purpose
+
+---
+
 ## [v1.2.0] - 2026-04-26
 
 ### Added
