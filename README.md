@@ -40,25 +40,29 @@ All tabs include live progress bars and a completion summary dialog.
 
 ## Quick Start
 
-### Run (from network share or local)
+### Run the app (any machine)
 
-Double-click `run.bat` or the built `.exe`.
+Double-click `run.bat`.
 
-> If launched from a network share, the app automatically copies itself to local temp before starting — this is required for Windows DLL loading.
+- If `dist\IT-Provisioning-Tool.exe` exists: launches it directly (no Python needed)
+- If no exe: falls back to Python dev mode (dev machine only)
 
-### Build standalone `.exe`
+### Build the standalone exe (dev machine only)
+
+Run once on your **local dev PC** (requires Python):
 
 ```
 build.bat
 ```
 
-This will:
-1. Find or download Python 3.11
-2. Install dependencies from `requirements.txt`
-3. Build with PyInstaller into `dist\IT-Provisioning-Tool.exe` (single file)
-4. Bundle all required DLLs (bcrypt, cffi, customtkinter, etc.)
+Produces `dist\IT-Provisioning-Tool.exe` — copy this to the network share.
+Network machines run it via `run.bat`. They do **not** need Python or `build.bat`.
 
-Copy `dist\IT-Provisioning-Tool.exe` to any machine and run — no Python or dependencies needed.
+Build steps:
+1. Finds Python (downloads 3.11 if not found)
+2. Installs dependencies from `requirements.txt`
+3. Builds with PyInstaller into `dist\IT-Provisioning-Tool.exe` (single file)
+4. Bundles all DLLs (bcrypt, cffi, customtkinter, etc.)
 
 ### Run from source (dev)
 
