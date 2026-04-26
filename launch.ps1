@@ -9,38 +9,62 @@ if ($ScriptDir -like "\\*") {
     Write-Host "Running from: $RunDir"
 }
 
-# Find Python — check PATH first, then common install locations
-# (elevated processes lose user-level PATH entries)
+# Find Python — registry first (survives elevation), then PATH, then known dirs
 $PythonExe = $null
 
-foreach ($cmd in @("python", "py")) {
-    try {
-        $ver = & $cmd --version 2>&1
-        if ($LASTEXITCODE -eq 0 -and "$ver" -match "Python 3") {
-            $PythonExe = $cmd
-            break
-        }
-    } catch {}
-}
-
-if (-not $PythonExe) {
-    $SearchRoots = @(
-        $env:LOCALAPPDATA,
-        $env:APPDATA,
-        "C:\",
-        "C:\Program Files",
-        "C:\Program Files (x86)"
-    )
-    $Candidates = @()
-    foreach ($root in $SearchRoots) {
-        if ($root) {
-            $Candidates += Get-ChildItem -Path $root -Filter "python.exe" -Recurse -Depth 5 `
-                -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch "WindowsApps" }
+# 1. Registry (most reliable — works in both normal and elevated context)
+$RegRoots = @(
+    "HKCU:\Software\Python\PythonCore",
+    "HKLM:\Software\Python\PythonCore",
+    "HKLM:\Software\Wow6432Node\Python\PythonCore"
+)
+foreach ($reg in $RegRoots) {
+    if (Test-Path $reg) {
+        foreach ($ver in (Get-ChildItem $reg -ErrorAction SilentlyContinue)) {
+            $ipKey = "$($ver.PSPath)\InstallPath"
+            if (Test-Path $ipKey) {
+                $ip = (Get-ItemProperty $ipKey -ErrorAction SilentlyContinue)
+                $candidate = if ($ip.ExecutablePath) { $ip.ExecutablePath }
+                             elseif ($ip.'(default)') { Join-Path $ip.'(default)' "python.exe" }
+                             else { $null }
+                if ($candidate -and (Test-Path $candidate)) {
+                    $PythonExe = $candidate
+                    break
+                }
+            }
         }
     }
-    if ($Candidates.Count -gt 0) {
-        $PythonExe = $Candidates[0].FullName
-        Write-Host "Found Python at: $PythonExe"
+    if ($PythonExe) { break }
+}
+
+# 2. PATH
+if (-not $PythonExe) {
+    foreach ($cmd in @("python", "py")) {
+        try {
+            $ver = & $cmd --version 2>&1
+            if ($LASTEXITCODE -eq 0 -and "$ver" -match "Python 3") { $PythonExe = $cmd; break }
+        } catch {}
+    }
+}
+
+# 3. Known install dirs
+if (-not $PythonExe) {
+    $KnownDirs = @(
+        (Join-Path $env:LOCALAPPDATA "Programs\Python"),
+        "C:\Python311", "C:\Python312", "C:\Python310",
+        "C:\Program Files\Python311", "C:\Program Files\Python312"
+    )
+    foreach ($dir in $KnownDirs) {
+        $candidate = Join-Path $dir "python.exe"
+        if (Test-Path $candidate) { $PythonExe = $candidate; break }
+        # also check subdirs one level deep (e.g. Programs\Python\Python311\)
+        if (Test-Path $dir) {
+            foreach ($sub in (Get-ChildItem $dir -Directory -ErrorAction SilentlyContinue)) {
+                $candidate = Join-Path $sub.FullName "python.exe"
+                if (Test-Path $candidate) { $PythonExe = $candidate; break }
+            }
+        }
+        if ($PythonExe) { break }
     }
 }
 
@@ -51,6 +75,8 @@ if (-not $PythonExe) {
     Read-Host "Press Enter to exit"
     exit 1
 }
+
+Write-Host "Python: $PythonExe"
 
 # Check if already admin
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
