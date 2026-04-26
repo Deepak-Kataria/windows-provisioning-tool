@@ -1,4 +1,6 @@
+import os
 import customtkinter as ctk
+from modules.paths import get_base_dir
 from ui.tab_system import SystemTab
 from ui.tab_debloat import DebloatTab
 from ui.tab_telemetry import TelemetryTab
@@ -32,9 +34,17 @@ class Dashboard(ctk.CTkFrame):
         ctk.CTkLabel(title_frame, text="IT Provisioning Tool",
                       font=ctk.CTkFont(size=18, weight="bold")).grid(
             row=0, column=0, sticky="w")
-        ctk.CTkLabel(title_frame, text=APP_VERSION,
-                      font=ctk.CTkFont(size=11),
-                      text_color="gray").grid(row=0, column=1, padx=(8, 0), sticky="w")
+
+        # Clickable version badge - opens changelog
+        ver_btn = ctk.CTkButton(
+            title_frame, text=APP_VERSION,
+            font=ctk.CTkFont(size=11),
+            text_color="#4FC3F7",
+            fg_color="transparent",
+            hover_color=("#2a2a2a", "#1a1a1a"),
+            width=60, height=22,
+            command=self._show_changelog)
+        ver_btn.grid(row=0, column=1, padx=(6, 0), sticky="w")
 
         role_badge = "ADMIN" if self.role == "admin" else "USER"
         badge_color = "#4CAF50" if self.role == "admin" else "#2196F3"
@@ -63,7 +73,6 @@ class Dashboard(ctk.CTkFrame):
             ("Users", UsersTab),
         ]
 
-        # Admin-only tabs
         admin_only = {"System", "Debloat", "Privacy", "Org Settings", "Users"}
 
         for tab_name, TabClass in tab_definitions:
@@ -74,3 +83,29 @@ class Dashboard(ctk.CTkFrame):
             tab.grid_columnconfigure(0, weight=1)
             widget = TabClass(tab, self.role)
             widget.grid(row=0, column=0, sticky="nsew")
+
+    def _show_changelog(self):
+        changelog_path = os.path.join(get_base_dir(), "CHANGELOG.md")
+        try:
+            with open(changelog_path, encoding="utf-8") as f:
+                content = f.read()
+        except FileNotFoundError:
+            content = "CHANGELOG.md not found."
+
+        dialog = ctk.CTkToplevel(self)
+        dialog.title(f"Changelog - {APP_VERSION}")
+        dialog.geometry("680x540")
+        dialog.resizable(True, True)
+        dialog.grab_set()
+        dialog.lift()
+        dialog.focus_force()
+        dialog.grid_rowconfigure(0, weight=1)
+        dialog.grid_columnconfigure(0, weight=1)
+
+        box = ctk.CTkTextbox(dialog, wrap="word", font=ctk.CTkFont(family="Courier New", size=12))
+        box.grid(row=0, column=0, padx=16, pady=(16, 8), sticky="nsew")
+        box.insert("1.0", content)
+        box.configure(state="disabled")
+
+        ctk.CTkButton(dialog, text="Close", width=100,
+                       command=dialog.destroy).grid(row=1, column=0, pady=(0, 16))

@@ -101,6 +101,7 @@ Write-Host "Running PyInstaller (building locally)..."
     "--add-binary=${CffiBackend};." `
     "--add-data=$LocalSrc\config;config" `
     "--add-data=$LocalSrc\scripts;scripts" `
+    "--add-data=$LocalSrc\CHANGELOG.md;." `
     --distpath $LocalDist `
     --workpath $LocalWork `
     --specpath $LocalBuild `
