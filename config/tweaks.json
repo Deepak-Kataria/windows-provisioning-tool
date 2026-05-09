@@ -1,0 +1,288 @@
+{
+    "essential": [
+        {
+            "id": "telemetry",
+            "name": "Telemetry - Disable",
+            "description": "Stops Windows from sending diagnostic and usage data to Microsoft.",
+            "apply": "If (!(Test-Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection')) { New-Item -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection' -Force | Out-Null }; Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection' -Name 'AllowTelemetry' -Value 0 -Force",
+            "undo": "Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection' -Name 'AllowTelemetry' -ErrorAction SilentlyContinue"
+        },
+        {
+            "id": "activity_history",
+            "name": "Activity History - Disable",
+            "description": "Disables Windows activity history and timeline feature.",
+            "apply": "If (!(Test-Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System')) { New-Item -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System' -Force | Out-Null }; Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System' -Name 'EnableActivityFeed' -Value 0 -Force; Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System' -Name 'PublishUserActivities' -Value 0 -Force",
+            "undo": "Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System' -Name 'EnableActivityFeed' -ErrorAction SilentlyContinue; Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System' -Name 'PublishUserActivities' -ErrorAction SilentlyContinue"
+        },
+        {
+            "id": "location_tracking",
+            "name": "Location Tracking - Disable",
+            "description": "Prevents Windows and apps from accessing your device location.",
+            "apply": "If (!(Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\location')) { New-Item -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\location' -Force | Out-Null }; Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\location' -Name 'Value' -Value 'Deny' -Force",
+            "undo": "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\location' -Name 'Value' -Value 'Allow' -Force"
+        },
+        {
+            "id": "hibernation",
+            "name": "Hibernation - Disable",
+            "description": "Disables hibernate to free up disk space equal to installed RAM.",
+            "apply": "powercfg /hibernate off",
+            "undo": "powercfg /hibernate on"
+        },
+        {
+            "id": "consumer_features",
+            "name": "ConsumerFeatures - Disable",
+            "description": "Disables Microsoft consumer features like app suggestions and spotlight ads.",
+            "apply": "If (!(Test-Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent')) { New-Item -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent' -Force | Out-Null }; Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent' -Name 'DisableWindowsConsumerFeatures' -Value 1 -Force",
+            "undo": "Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent' -Name 'DisableWindowsConsumerFeatures' -ErrorAction SilentlyContinue"
+        },
+        {
+            "id": "temp_files",
+            "name": "Temporary Files - Remove",
+            "description": "Clears temp folders to free disk space. Safe to run anytime.",
+            "apply": "Remove-Item -Path \"$env:TEMP\\*\" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -Path 'C:\\Windows\\Temp\\*' -Recurse -Force -ErrorAction SilentlyContinue",
+            "undo": null
+        },
+        {
+            "id": "end_task_right_click",
+            "name": "End Task Right-Click - Enable",
+            "description": "Adds End Task option when right-clicking taskbar app buttons (Windows 11).",
+            "apply": "If (!(Test-Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\TaskbarDeveloperSettings')) { New-Item -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\TaskbarDeveloperSettings' -Force | Out-Null }; Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\TaskbarDeveloperSettings' -Name 'TaskbarEndTask' -Value 1 -Force",
+            "undo": "Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\TaskbarDeveloperSettings' -Name 'TaskbarEndTask' -Value 0 -Force"
+        },
+        {
+            "id": "widgets",
+            "name": "Widgets - Disable",
+            "description": "Removes the Widgets button from the taskbar.",
+            "apply": "Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced' -Name 'TaskbarDa' -Value 0 -Force",
+            "undo": "Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced' -Name 'TaskbarDa' -Value 1 -Force"
+        },
+        {
+            "id": "ms_store_search",
+            "name": "Store Recommended Search Results - Disable",
+            "description": "Stops Microsoft Store app suggestions appearing in Start menu search.",
+            "apply": "If (!(Test-Path 'HKCU:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Explorer')) { New-Item -Path 'HKCU:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Explorer' -Force | Out-Null }; Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Explorer' -Name 'DisableSearchBoxSuggestions' -Value 1 -Force",
+            "undo": "Remove-ItemProperty -Path 'HKCU:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Explorer' -Name 'DisableSearchBoxSuggestions' -ErrorAction SilentlyContinue"
+        },
+        {
+            "id": "ps7_telemetry",
+            "name": "PowerShell 7 Telemetry - Disable",
+            "description": "Opts out of PowerShell 7 telemetry data collection.",
+            "apply": "[System.Environment]::SetEnvironmentVariable('POWERSHELL_TELEMETRY_OPTOUT', '1', [System.EnvironmentVariableTarget]::Machine)",
+            "undo": "[System.Environment]::SetEnvironmentVariable('POWERSHELL_TELEMETRY_OPTOUT', '', [System.EnvironmentVariableTarget]::Machine)"
+        },
+        {
+            "id": "folder_discovery",
+            "name": "File Explorer Auto Folder Discovery - Disable",
+            "description": "Prevents File Explorer from automatically adjusting folder view based on content.",
+            "apply": "Set-ItemProperty -Path 'HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\Bags\\AllFolders\\Shell' -Name 'FolderType' -Value 'NotSpecified' -ErrorAction SilentlyContinue",
+            "undo": "Remove-ItemProperty -Path 'HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\Bags\\AllFolders\\Shell' -Name 'FolderType' -ErrorAction SilentlyContinue"
+        },
+        {
+            "id": "wpbt",
+            "name": "Windows Platform Binary Table (WPBT) - Disable",
+            "description": "Disables WPBT which allows OEM/BIOS to install software silently.",
+            "apply": "If (!(Test-Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management')) { New-Item -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management' -Force | Out-Null }; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management' -Name 'DisableWPBT' -Value 1 -Force",
+            "undo": "Remove-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management' -Name 'DisableWPBT' -ErrorAction SilentlyContinue"
+        }
+    ],
+    "advanced": [
+        {
+            "id": "copilot",
+            "name": "Microsoft Copilot - Disable",
+            "description": "Disables Microsoft Copilot AI assistant. Recommended for business machines.",
+            "apply": "If (!(Test-Path 'HKCU:\\Software\\Policies\\Microsoft\\Windows\\WindowsCopilot')) { New-Item -Path 'HKCU:\\Software\\Policies\\Microsoft\\Windows\\WindowsCopilot' -Force | Out-Null }; Set-ItemProperty -Path 'HKCU:\\Software\\Policies\\Microsoft\\Windows\\WindowsCopilot' -Name 'TurnOffWindowsCopilot' -Value 1 -Force; Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced' -Name 'ShowCopilotButton' -Value 0 -Force",
+            "undo": "Remove-ItemProperty -Path 'HKCU:\\Software\\Policies\\Microsoft\\Windows\\WindowsCopilot' -Name 'TurnOffWindowsCopilot' -ErrorAction SilentlyContinue; Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced' -Name 'ShowCopilotButton' -Value 1 -Force"
+        },
+        {
+            "id": "explorer_gallery",
+            "name": "File Explorer Gallery - Disable",
+            "description": "Removes the Gallery item from the File Explorer left navigation pane.",
+            "apply": "If (!(Test-Path 'HKCU:\\Software\\Classes\\CLSID\\{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}')) { New-Item -Path 'HKCU:\\Software\\Classes\\CLSID\\{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}' -Force | Out-Null }; Set-ItemProperty -Path 'HKCU:\\Software\\Classes\\CLSID\\{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}' -Name 'System.IsPinnedToNameSpaceTree' -Value 0 -Force",
+            "undo": "Set-ItemProperty -Path 'HKCU:\\Software\\Classes\\CLSID\\{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}' -Name 'System.IsPinnedToNameSpaceTree' -Value 1 -Force"
+        },
+        {
+            "id": "visual_effects",
+            "name": "Visual Effects - Best Performance",
+            "description": "Turns off animations and visual effects for maximum performance.",
+            "apply": "Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects' -Name 'VisualFXSetting' -Value 2 -Force; $path = 'HKCU:\\Control Panel\\Desktop'; Set-ItemProperty -Path $path -Name 'UserPreferencesMask' -Value ([byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00)) -Force",
+            "undo": "Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects' -Name 'VisualFXSetting' -Value 0 -Force"
+        },
+        {
+            "id": "xbox_gaming",
+            "name": "Xbox & Gaming Components - Remove",
+            "description": "Removes Xbox apps and gaming overlay. Recommended for business machines.",
+            "apply": "@('Microsoft.GamingApp','Microsoft.XboxApp','Microsoft.XboxGameOverlay','Microsoft.XboxIdentityProvider','Microsoft.XboxGamingOverlay') | ForEach-Object { Get-AppxPackage -Name $_ -ErrorAction SilentlyContinue | Remove-AppxPackage -ErrorAction SilentlyContinue }",
+            "undo": null
+        },
+        {
+            "id": "teredo",
+            "name": "Teredo - Disable",
+            "description": "Disables Teredo IPv6 tunneling. Reduces network overhead on IPv4-only networks.",
+            "apply": "netsh interface teredo set state disabled",
+            "undo": "netsh interface teredo set state default"
+        },
+        {
+            "id": "storage_sense",
+            "name": "Storage Sense - Disable",
+            "description": "Disables automatic disk cleanup. Useful to prevent unexpected file deletion.",
+            "apply": "If (!(Test-Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\StorageSense\\Parameters\\StoragePolicy')) { New-Item -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\StorageSense\\Parameters\\StoragePolicy' -Force | Out-Null }; Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\StorageSense\\Parameters\\StoragePolicy' -Name '01' -Value 0 -Force",
+            "undo": "Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\StorageSense\\Parameters\\StoragePolicy' -Name '01' -Value 1 -Force"
+        },
+        {
+            "id": "classic_rightclick",
+            "name": "Right-Click Menu Classic - Enable",
+            "description": "Restores the full classic right-click context menu in Windows 11.",
+            "apply": "If (!(Test-Path 'HKCU:\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\\InprocServer32')) { New-Item -Path 'HKCU:\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\\InprocServer32' -Force | Out-Null }; Set-ItemProperty -Path 'HKCU:\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\\InprocServer32' -Name '(default)' -Value '' -Force",
+            "undo": "Remove-Item -Path 'HKCU:\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}' -Recurse -Force -ErrorAction SilentlyContinue"
+        },
+        {
+            "id": "edge_debloat",
+            "name": "Microsoft Edge - Debloat",
+            "description": "Disables Edge telemetry, first run experience, and sponsored content.",
+            "apply": "If (!(Test-Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge')) { New-Item -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge' -Force | Out-Null }; Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge' -Name 'HideFirstRunExperience' -Value 1 -Force; Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge' -Name 'MetricsReportingEnabled' -Value 0 -Force; Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge' -Name 'SpotlightExperiencesAndRecommendationsEnabled' -Value 0 -Force",
+            "undo": "Remove-Item -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge' -Recurse -Force -ErrorAction SilentlyContinue"
+        }
+    ],
+    "preferences": [
+        {
+            "id": "file_extensions",
+            "name": "File Explorer File Extensions",
+            "description": "Show file extensions (e.g. .txt, .exe) in File Explorer.",
+            "reg_path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+            "reg_name": "HideFileExt",
+            "on_value": 0,
+            "off_value": 1
+        },
+        {
+            "id": "hidden_files",
+            "name": "File Explorer Hidden Files",
+            "description": "Show hidden files and folders in File Explorer.",
+            "reg_path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+            "reg_name": "Hidden",
+            "on_value": 1,
+            "off_value": 2
+        },
+        {
+            "id": "numlock",
+            "name": "Num Lock on Startup",
+            "description": "Enable Num Lock automatically when Windows starts.",
+            "reg_path": "HKCU:\\Control Panel\\Keyboard",
+            "reg_name": "InitialKeyboardIndicators",
+            "on_value": 2,
+            "off_value": 0
+        },
+        {
+            "id": "sticky_keys",
+            "name": "Sticky Keys - Disable",
+            "description": "Disables the Sticky Keys prompt that appears when Shift is pressed 5 times.",
+            "reg_path": "HKCU:\\Control Panel\\Accessibility\\StickyKeys",
+            "reg_name": "Flags",
+            "on_value": 506,
+            "off_value": 510
+        },
+        {
+            "id": "mouse_accel",
+            "name": "Mouse Acceleration - Disable",
+            "description": "Disables pointer precision (mouse acceleration) for consistent mouse movement.",
+            "reg_path": "HKCU:\\Control Panel\\Mouse",
+            "reg_name": "MouseSpeed",
+            "on_value": 0,
+            "off_value": 1
+        },
+        {
+            "id": "taskbar_center",
+            "name": "Taskbar Centered Icons",
+            "description": "Center taskbar icons (Windows 11). Turn off to left-align like Windows 10.",
+            "reg_path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+            "reg_name": "TaskbarAl",
+            "on_value": 1,
+            "off_value": 0
+        },
+        {
+            "id": "taskbar_search",
+            "name": "Taskbar Search Icon",
+            "description": "Show or hide the search icon/box on the taskbar.",
+            "reg_path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Search",
+            "reg_name": "SearchboxTaskbarMode",
+            "on_value": 1,
+            "off_value": 0
+        },
+        {
+            "id": "taskbar_taskview",
+            "name": "Task View Button",
+            "description": "Show or hide the Task View button on the taskbar.",
+            "reg_path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+            "reg_name": "ShowTaskViewButton",
+            "on_value": 1,
+            "off_value": 0
+        },
+        {
+            "id": "bing_search",
+            "name": "Start Menu Bing Search - Disable",
+            "description": "Removes Bing web results from Start menu search.",
+            "reg_path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Search",
+            "reg_name": "BingSearchEnabled",
+            "on_value": 0,
+            "off_value": 1
+        },
+        {
+            "id": "start_recommendations",
+            "name": "Start Menu Recommendations - Disable",
+            "description": "Hides recommended/suggested apps in the Start menu.",
+            "reg_path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+            "reg_name": "Start_IrisRecommendations",
+            "on_value": 0,
+            "off_value": 1
+        }
+    ],
+    "privacy": [
+        {
+            "id": "diagnostic_services",
+            "name": "Diagnostic Services - Disable",
+            "description": "Stops and disables DiagTrack and dmwappushservice — services that send diagnostic data to Microsoft.",
+            "apply": "Stop-Service -Name 'DiagTrack' -Force -ErrorAction SilentlyContinue; Set-Service -Name 'DiagTrack' -StartupType Disabled -ErrorAction SilentlyContinue; Stop-Service -Name 'dmwappushservice' -Force -ErrorAction SilentlyContinue; Set-Service -Name 'dmwappushservice' -StartupType Disabled -ErrorAction SilentlyContinue",
+            "undo": "Set-Service -Name 'DiagTrack' -StartupType Automatic -ErrorAction SilentlyContinue; Start-Service -Name 'DiagTrack' -ErrorAction SilentlyContinue; Set-Service -Name 'dmwappushservice' -StartupType Automatic -ErrorAction SilentlyContinue; Start-Service -Name 'dmwappushservice' -ErrorAction SilentlyContinue"
+        },
+        {
+            "id": "advertising_id",
+            "name": "Advertising ID - Disable",
+            "description": "Stops personalized ads based on app usage by disabling the Windows Advertising ID.",
+            "apply": "If (!(Test-Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo')) { New-Item -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo' -Force | Out-Null }; Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo' -Name 'Enabled' -Value 0 -Force",
+            "undo": "Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo' -Name 'Enabled' -Value 1 -Force"
+        },
+        {
+            "id": "feedback_notifications",
+            "name": "Feedback Notifications - Disable",
+            "description": "Removes Windows feedback prompts and survey pop-ups.",
+            "apply": "If (!(Test-Path 'HKCU:\\SOFTWARE\\Microsoft\\Siuf\\Rules')) { New-Item -Path 'HKCU:\\SOFTWARE\\Microsoft\\Siuf\\Rules' -Force | Out-Null }; Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Siuf\\Rules' -Name 'NumberOfSIUFInPeriod' -Value 0 -Force; If (!(Test-Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection')) { New-Item -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection' -Force | Out-Null }; Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection' -Name 'DoNotShowFeedbackNotifications' -Value 1 -Force",
+            "undo": "Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Siuf\\Rules' -Name 'NumberOfSIUFInPeriod' -Value 3 -Force; Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection' -Name 'DoNotShowFeedbackNotifications' -ErrorAction SilentlyContinue"
+        }
+    ],
+    "org": [
+        {
+            "id": "no_auto_reboot",
+            "name": "Auto-Restart After Updates - Disable",
+            "description": "Prevents Windows from auto-restarting after updates when users are logged in.",
+            "apply": "If (!(Test-Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU')) { New-Item -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU' -Force | Out-Null }; Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU' -Name 'NoAutoRebootWithLoggedOnUsers' -Value 1 -Force",
+            "undo": "Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU' -Name 'NoAutoRebootWithLoggedOnUsers' -ErrorAction SilentlyContinue"
+        },
+        {
+            "id": "lockscreen_ads",
+            "name": "Lock Screen Ads - Disable",
+            "description": "Removes ads and suggestions from the Windows lock screen.",
+            "apply": "If (!(Test-Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager')) { New-Item -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager' -Force | Out-Null }; Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager' -Name 'RotatingLockScreenOverlayEnabled' -Value 0 -Force",
+            "undo": "Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager' -Name 'RotatingLockScreenOverlayEnabled' -Value 1 -Force"
+        },
+        {
+            "id": "startup_delay",
+            "name": "Startup Programs Delay - Disable",
+            "description": "Removes the artificial startup delay for applications. Apps launch faster on boot.",
+            "apply": "If (!(Test-Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Serialize')) { New-Item -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Serialize' -Force | Out-Null }; Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Serialize' -Name 'StartupDelayInMSec' -Value 0 -Force",
+            "undo": "Remove-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Serialize' -Name 'StartupDelayInMSec' -ErrorAction SilentlyContinue"
+        }
+    ],
+    "performance": {
+        "enable_cmd": "$existing = powercfg -l | Select-String 'Ultimate Performance'; if (-not $existing) { powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 | Out-Null }; $guid = (powercfg -l | Select-String 'Ultimate Performance' | Select-Object -First 1).ToString().Split()[3]; powercfg -setactive $guid; Write-Host \"Ultimate Performance plan activated: $guid\"",
+        "disable_cmd": "powercfg -setactive 381b4222-f694-41f0-9685-ff5bb260df2e; Write-Host 'Switched to Balanced power plan.'"
+    }
+}

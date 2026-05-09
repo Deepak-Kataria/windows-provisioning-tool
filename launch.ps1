@@ -72,15 +72,6 @@ if (-not $PythonExe) {
     exit 1
 }
 
-# Elevate if not admin
-$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
-    [Security.Principal.WindowsBuiltInRole]::Administrator)
-
-if (-not $isAdmin) {
-    Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
-    exit
-}
-
 # Install dependencies
 $ReqFile = Join-Path $RunDir "requirements.txt"
 if (Test-Path $ReqFile) {

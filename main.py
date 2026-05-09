@@ -10,6 +10,15 @@ if getattr(sys, 'frozen', False) and sys.executable.startswith('\\\\'):
     subprocess.Popen([os.path.join(_dst, os.path.basename(sys.executable))])
     sys.exit(0)
 
+# Source mode: self-elevate if not admin (exe handles this via --uac-admin manifest)
+if not getattr(sys, 'frozen', False):
+    import ctypes
+    if not ctypes.windll.shell32.IsUserAnAdmin():
+        script = os.path.abspath(sys.argv[0])
+        args = ' '.join(f'"{a}"' for a in [script] + sys.argv[1:])
+        ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, args, None, 1)
+        sys.exit(0)
+
 import customtkinter as ctk
 from ui.dashboard import Dashboard
 

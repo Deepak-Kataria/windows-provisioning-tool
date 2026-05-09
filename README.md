@@ -12,9 +12,8 @@ Built with Python and CustomTkinter. Runs as a standalone `.exe` — no Python i
 |-----|-------------|
 | **System** | Rename PC (DT/LT convention), auto-generate name from hardware ID, join domain with OU browser |
 | **Debloat** | Remove pre-installed Windows bloatware via PowerShell |
-| **Privacy / Telemetry** | Disable Windows telemetry, diagnostics, location tracking, advertising ID — with rollback support |
-| **Apps** | Install common apps and team-specific apps via winget — with uninstall/rollback |
-| **Org Settings** | Apply organisation-standard registry tweaks — with rollback support |
+| **Apps** | Install common + team apps via winget; install offline/local apps from network share or local path; uninstall/rollback support; Stop button; auto-detect silent args |
+| **Tweaks** | Essential tweaks, advanced tweaks, privacy/telemetry settings, org registry settings, customise preferences (toggles), performance plans — all with Apply + Undo and full log dialog |
 | **User Management** | Add, delete, and reset passwords for tool users (admin only) |
 
 All tabs include live progress bars and a completion summary dialog.
@@ -85,23 +84,27 @@ To re-enable: set `AUTH_ENABLED = True` in `main.py` and uncomment the login imp
 
 ```
 windows-provisioning-tool/
-├── main.py                  # Entry point
-├── run.bat                  # Launcher (handles UNC paths)
-├── build.bat                # Build script (auto-elevates)
+├── main.py                  # Entry point (self-elevates to admin in source mode)
+├── run.bat                  # Launcher — exe if built, Python fallback, always admin
+├── build.bat                # Build script (dev PC only, auto-elevates)
 ├── build.ps1                # PyInstaller build logic
+├── launch.ps1               # Launch logic called by run.bat
 ├── requirements.txt
 │
 ├── config/
 │   ├── domain_config.json   # Domain name, DC IP, OU path, company prefix
-│   ├── apps_common.json     # Apps installed on all machines
+│   ├── apps_common.json     # Apps installed on all machines (winget or local)
 │   ├── apps_teams.json      # Team-specific apps (IT, Finance, Dev, etc.)
+│   ├── apps_local.json      # Offline/local installers (managed via UI by admin)
 │   ├── debloat_list.json    # Packages to remove
-│   └── org_settings.json   # Registry tweaks
+│   ├── org_settings.json    # Legacy org registry tweaks (now also in tweaks.json)
+│   └── tweaks.json          # All tweaks: essential, advanced, privacy, org, preferences
 │
 ├── modules/
 │   ├── auth.py              # Login, bcrypt password hashing, user management
 │   ├── logger.py            # Audit logger
-│   ├── runner.py            # PowerShell + winget runner
+│   ├── runner.py            # PowerShell + winget + local installer runner
+│   ├── utils.py             # Path helpers: resource_path, writable_path, resolve_installer_path
 │   └── paths.py             # PyInstaller-aware base path helper
 │
 ├── scripts/
@@ -119,9 +122,8 @@ windows-provisioning-tool/
     ├── first_run_dialog.py
     ├── tab_system.py
     ├── tab_debloat.py
-    ├── tab_telemetry.py
-    ├── tab_apps.py
-    ├── tab_org_settings.py
+    ├── tab_apps.py          # Winget + local/offline installer support
+    ├── tab_tweaks.py        # All tweaks, privacy, org settings, preferences
     └── tab_users.py
 ```
 
@@ -141,11 +143,17 @@ Edit JSON files in `config/` before building to pre-populate defaults:
 }
 ```
 
-**`apps_common.json`** — add/remove winget IDs for apps installed on every machine.
+**`apps_common.json`** — winget IDs for apps installed on every machine. Supports offline installers via `"installer"` key.
 
 **`apps_teams.json`** — define teams and their app lists.
 
-**`org_settings.json`** — registry tweaks applied by the Org Settings tab.
+**`apps_local.json`** — offline/local installer entries. Managed via the "+ Add App" button in the Apps tab (admin only). Example:
+```json
+{"name": "My ERP", "installer": "installers\\erp_setup.exe", "installer_args": ["/silent"]}
+```
+Place installer files in an `installers\` folder next to the exe on the network share, or use absolute/UNC paths.
+
+**`tweaks.json`** — all tweaks for the Tweaks tab. Add entries to `essential`, `advanced`, `privacy`, or `org` arrays. Each entry needs `id`, `name`, `description`, `apply` (PowerShell), and optional `undo`.
 
 ---
 

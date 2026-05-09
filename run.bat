@@ -1,5 +1,6 @@
 @echo off
-REM ── DEV MODE — runs app directly from source (requires Python) ────────────
-REM    Handles UNC share, auto-installs pip dependencies, elevates to admin.
-REM ── FOR DEPLOYMENT: run build.bat to produce a standalone exe ─────────────
-powershell -ExecutionPolicy Bypass -File "%~dp0launch.ps1"
+REM ── Launches IT Provisioning Tool. ──────────────────────────────────────
+REM    Runs built exe if present; falls back to Python source (dev mode).
+REM ── To build standalone exe: run build.bat ───────────────────────────────
+powershell -ExecutionPolicy Bypass -Command "Start-Process powershell -ArgumentList '-ExecutionPolicy Bypass -File ""%~dp0launch.ps1""' -Verb RunAs -Wait"
+pause
