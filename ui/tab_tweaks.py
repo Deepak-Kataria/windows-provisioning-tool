@@ -238,19 +238,27 @@ class TweaksTab(ctk.CTkFrame):
                 cmd = tweak.get("apply") if mode == "apply" else tweak.get("undo")
                 log_lines.append(f"\n>>> {tweak['name']}")
                 if not cmd:
-                    results.append((tweak["name"], None, "No undo command defined"))
+                    results.append((tweak["name"], None, "No undo command defined", ""))
                     log_lines.append("  [SKIP] No undo command defined.")
                     continue
-                rc, out = run_inline_powershell(cmd)
+
+                # Wrap in try/catch so suppressed errors still surface
+                wrapped = (
+                    f"$ErrorActionPreference='Stop'; "
+                    f"try {{ {cmd} }} "
+                    f"catch {{ Write-Host \"ERROR: $($_.Exception.Message)\"; exit 1 }}"
+                )
+                rc, out = run_inline_powershell(wrapped)
                 if out.strip():
                     for line in out.strip().splitlines():
                         log_lines.append(f"  {line}")
                 if rc == 0:
-                    results.append((tweak["name"], True, ""))
-                    log_lines.append(f"  [OK] exit {rc}")
+                    results.append((tweak["name"], True, "", ""))
+                    log_lines.append(f"  [OK]")
                     log(f"Tweak OK: {tweak['name']}", "success")
                 else:
-                    results.append((tweak["name"], False, out.strip() or f"exit code {rc}"))
+                    err_msg = out.strip() or f"exit code {rc}"
+                    results.append((tweak["name"], False, err_msg, cmd))
                     log_lines.append(f"  [FAILED] exit {rc}")
                     log(f"Tweak FAIL: {tweak['name']} — {out}", "error")
 
@@ -301,9 +309,9 @@ class TweaksTab(ctk.CTkFrame):
         threading.Thread(target=task, daemon=True).start()
 
     def _show_done(self, results, mode, log_text=""):
-        succeeded = sum(1 for _, ok, _ in results if ok is True)
-        failed = sum(1 for _, ok, _ in results if ok is False)
-        skipped = sum(1 for _, ok, _ in results if ok is None)
+        succeeded = sum(1 for _, ok, *_ in results if ok is True)
+        failed = sum(1 for _, ok, *_ in results if ok is False)
+        skipped = sum(1 for _, ok, *_ in results if ok is None)
         total = len(results)
         action = "applied" if mode == "apply" else "undone"
 
@@ -335,7 +343,7 @@ class TweaksTab(ctk.CTkFrame):
         scroll.grid(row=1, column=0, padx=16, pady=(0, 8), sticky="nsew")
         scroll.grid_columnconfigure(0, weight=1)
 
-        for idx, (name, ok, err) in enumerate(results):
+        for idx, (name, ok, err, cmd) in enumerate(results):
             if ok is True:
                 icon, color = "✓", "#4CAF50"
                 detail = ""
@@ -359,9 +367,16 @@ class TweaksTab(ctk.CTkFrame):
 
             if detail:
                 ctk.CTkLabel(row_frame, text=detail, anchor="w",
-                              text_color="#aaaaaa", font=ctk.CTkFont(size=10),
+                              text_color="#ff8a80" if ok is False else "#aaaaaa",
+                              font=ctk.CTkFont(size=10),
                               wraplength=440).grid(
-                    row=1, column=1, sticky="w", padx=4, pady=(0, 6))
+                    row=1, column=1, sticky="w", padx=4, pady=(0, 2))
+            if ok is False and cmd:
+                short_cmd = cmd[:120] + "..." if len(cmd) > 120 else cmd
+                ctk.CTkLabel(row_frame, text=f"CMD: {short_cmd}", anchor="w",
+                              text_color="#555555", font=ctk.CTkFont(size=9, family="Courier New"),
+                              wraplength=440).grid(
+                    row=2, column=1, sticky="w", padx=4, pady=(0, 6))
 
         # Log section
         ctk.CTkLabel(dialog, text="Full Log",
