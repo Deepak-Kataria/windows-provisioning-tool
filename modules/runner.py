@@ -178,7 +178,8 @@ def run_local_installer(path: str, args: list = None, callback=None, process_hol
 
 def run_inline_powershell(script: str, callback=None):
     cmd = ["powershell.exe", "-ExecutionPolicy", "Bypass", "-Command", script]
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                                encoding="utf-8", errors="replace")
     output_lines = []
     for line in process.stdout:
         line = line.strip()
@@ -186,5 +187,11 @@ def run_inline_powershell(script: str, callback=None):
             output_lines.append(line)
             if callback:
                 callback(line)
+    stderr_out = process.stderr.read().strip()
     process.wait()
+    if stderr_out:
+        for line in stderr_out.splitlines():
+            line = line.strip()
+            if line:
+                output_lines.append(f"ERR: {line}")
     return process.returncode, "\n".join(output_lines)
