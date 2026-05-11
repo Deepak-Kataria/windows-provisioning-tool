@@ -29,3 +29,19 @@ def log(message: str, level: str = "info"):
         logger.error(message)
     elif level == "success":
         logger.info(f"[SUCCESS] {message}")
+
+
+CHANGES_LOG = os.path.join(LOG_DIR, "changes.log")
+
+
+def log_change(category: str, action: str, before: str = None, after: str = None):
+    """Append a structured change entry to the persistent changes.log file."""
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    parts = [ts, category, action]
+    if before:
+        parts.append(f"BEFORE: {before}")
+    if after:
+        parts.append(f"AFTER: {after}")
+    with open(CHANGES_LOG, "a", encoding="utf-8") as f:
+        f.write(" | ".join(parts) + "\n")
+    logger.info(f"CHANGE: {category} — {action}")

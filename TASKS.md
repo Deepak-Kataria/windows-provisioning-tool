@@ -1,16 +1,10 @@
 # IT Provisioning Tool — Task Tracker
 
-Last updated: 2026-05-09
+Last updated: 2026-05-11
 
 ---
 
 ## Pending
-
-### #1 — Commit tweaks error detail improvements
-**Status:** Pending  
-**Details:** Latest changes to `ui/tab_tweaks.py` (try/catch wrapper, CMD shown in failure dialog, red error text) not yet committed to git.
-
----
 
 ### #3 — Fix Cam 350 InstallShield silent install failure
 **Status:** Pending  
@@ -22,28 +16,22 @@ Last updated: 2026-05-09
 
 ---
 
-### #4 — Fix gen1.bat 7-Zip replace prompt
-**Status:** Pending  
-**Details:**  
-- `gen1.bat` runs `7z x` without `-y` flag  
-- 7-Zip prompts "replace existing file?" → subprocess has no stdin → hangs forever  
-- Fix: add `-y` to every `7z` command inside `gen1.bat`  
-- Example: `7z x nutc.zip -oc:\Windows\SysWOW64 -y`  
-
----
-
-### #5 — Verify run.bat admin elevation works end-to-end
-**Status:** Pending  
-**Details:**  
-- Confirm `run.bat` → `launch.ps1` → app launches as Administrator  
-- Test from network share (UNC path)  
-- Verify local installers inherit admin rights (no UAC re-prompt mid-install)  
-
----
 
 ### #6 — Update project memory with session context
 **Status:** Pending  
 **Details:** Save current session work to Claude memory files so next session starts with full context (new tabs, config files, features, pending issues).
+
+---
+
+
+
+### #9 — AppData user profile cleanup
+**Status:** Pending  
+**Details:**  
+- List all user profiles on the machine with last login date  
+- Select profiles to clean AppData\Local and AppData\Roaming junk (temp, cache folders)  
+- Show size per profile  
+- Warning before touching active/current user profile data
 
 ---
 
@@ -53,7 +41,39 @@ Last updated: 2026-05-09
 
 ---
 
+## Completed (this session continued)
+
+### #7 — Vulnerability scan tab ✓
+**Completed:** 2026-05-11  
+**Result:** New Security tab (`ui/tab_security.py`). 13 checks across HIGH/MEDIUM/LOW severity: Firewall, RDP, SMBv1, Guest account, AutoLogon, Defender, UAC, Windows Updates, BitLocker, SMB signing, Password policy, Remote Registry, Telnet. Per-check Fix button that re-verifies after fix. Export report to `logs/security_scan_YYYY-MM-DD_HH-MM.txt`. All fixes logged via `log_change()` in `modules/logger.py` to persistent `logs/changes.log`.
+
+---
+
+### #8 — Temp file master cleaner ✓
+**Completed:** 2026-05-11  
+**Result:** New Cleanup tab (`ui/tab_cleanup.py`). 9 locations: User Temp, Windows Temp, Prefetch, WU Cache, WER, Chrome/Edge/Firefox caches, Recycle Bin. Per-checkbox selection, Scan Sizes calculates sizes first, Clean Selected runs PS + auto-rescans to report freed space. Admin-only tab.
+
+---
+
+### #5 — run.bat admin elevation ✓
+**Completed:** 2026-05-11  
+**Result:** Verified UNC + admin flow correct. Fixed `pause` — now only fires on error (`if %errorlevel% neq 0 pause`). Task #4 (gen1.bat) removed — separate app, not in scope.
+
+---
+
+### Config Tab ✓
+**Completed:** 2026-05-09  
+**Result:** New Config tab with Features, Fixes, Legacy Panels. Committed to master.
+
+---
+
 ## Completed
+
+### #1 — Commit tweaks error detail improvements ✓
+**Completed:** 2026-05-09  
+**Result:** Committed + pushed. try/catch wrapper, red error msg, grey CMD line in failure dialog.
+
+---
 
 ### #2 — Test Tweaks tab after restart ✓
 **Completed:** 2026-05-09  

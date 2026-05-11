@@ -39,7 +39,7 @@
             "id": "temp_files",
             "name": "Temporary Files - Remove",
             "description": "Clears temp folders to free disk space. Safe to run anytime.",
-            "apply": "Remove-Item -Path \"$env:TEMP\\*\" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -Path 'C:\\Windows\\Temp\\*' -Recurse -Force -ErrorAction SilentlyContinue",
+            "apply": "Remove-Item -Path \"$env:TEMP\\*\" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -Path 'C:\\Windows\\Temp\\*' -Recurse -Force -ErrorAction SilentlyContinue; exit 0",
             "undo": null
         },
         {

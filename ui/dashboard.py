@@ -6,6 +6,8 @@ from ui.tab_debloat import DebloatTab
 from ui.tab_apps import AppsTab
 from ui.tab_tweaks import TweaksTab
 from ui.tab_config import ConfigTab
+from ui.tab_cleanup import CleanupTab
+from ui.tab_security import SecurityTab
 from ui.tab_users import UsersTab
 
 APP_VERSION = "v1.3.0"
@@ -70,10 +72,12 @@ class Dashboard(ctk.CTkFrame):
             ("Apps", AppsTab),
             ("Tweaks", TweaksTab),
             ("Config", ConfigTab),
+            ("Cleanup", CleanupTab),
+            ("Security", SecurityTab),
             ("Users", UsersTab),
         ]
 
-        admin_only = {"System", "Debloat", "Tweaks", "Config", "Users"}
+        admin_only = {"System", "Debloat", "Tweaks", "Config", "Cleanup", "Security", "Users"}
 
         for tab_name, TabClass in tab_definitions:
             if tab_name in admin_only and self.role != "admin":

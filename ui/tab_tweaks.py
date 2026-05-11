@@ -242,13 +242,7 @@ class TweaksTab(ctk.CTkFrame):
                     log_lines.append("  [SKIP] No undo command defined.")
                     continue
 
-                # Wrap in try/catch so suppressed errors still surface
-                wrapped = (
-                    f"$ErrorActionPreference='Stop'; "
-                    f"try {{ {cmd} }} "
-                    f"catch {{ Write-Host \"ERROR: $($_.Exception.Message)\"; exit 1 }}"
-                )
-                rc, out = run_inline_powershell(wrapped)
+                rc, out = run_inline_powershell(cmd)
                 if out.strip():
                     for line in out.strip().splitlines():
                         log_lines.append(f"  {line}")
@@ -262,8 +256,8 @@ class TweaksTab(ctk.CTkFrame):
                     log_lines.append(f"  [FAILED] exit {rc}")
                     log(f"Tweak FAIL: {tweak['name']} — {out}", "error")
 
-            succeeded = sum(1 for _, ok, _ in results if ok is True)
-            failed = sum(1 for _, ok, _ in results if ok is False)
+            succeeded = sum(1 for _, ok, *_ in results if ok is True)
+            failed = sum(1 for _, ok, *_ in results if ok is False)
 
             def finish():
                 self._running = False
