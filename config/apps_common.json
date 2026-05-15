@@ -4,6 +4,12 @@
         {"name": "7-Zip", "winget_id": "7zip.7zip"},
         {"name": "Adobe Acrobat Reader", "winget_id": "Adobe.Acrobat.Reader.64-bit"},
         {"name": "Notepad++", "winget_id": "Notepad++.Notepad++"},
-        {"name": "VLC Media Player", "winget_id": "VideoLAN.VLC"}
+        {"name": "VLC Media Player", "winget_id": "VideoLAN.VLC"},
+        {"name": "AnyDesk", "winget_id": "AnyDesk.AnyDesk"},
+        {"name": "8x8 Work", "winget_id": "8x8.Work"},
+        {"name": "Microsoft Office 365", "winget_id": "Microsoft.Office"},
+        {"name": "Java (Runtime)", "winget_id": "Oracle.JavaRuntimeEnvironment"},
+        {"name": "Mozilla Firefox", "winget_id": "Mozilla.Firefox"},
+        {"name": "CutePDF Writer", "winget_id": "AcroSoftware.CutePDFWriter"}
     ]
 }

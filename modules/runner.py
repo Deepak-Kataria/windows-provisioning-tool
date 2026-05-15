@@ -7,6 +7,12 @@ from modules.paths import get_base_dir
 
 SCRIPTS_DIR = os.path.join(get_base_dir(), "scripts")
 
+_SPINNER = {'/', '-', '\\', '|'}
+
+
+def _is_noise(line: str) -> bool:
+    return line in _SPINNER
+
 
 def _local_script_path(script_path: str):
     """Return (path, is_temp). Copies to local temp if path is UNC — PowerShell -File rejects UNC paths."""
@@ -51,7 +57,7 @@ def run_winget(winget_id: str, callback=None, process_holder: list = None):
     output_lines = []
     for line in process.stdout:
         line = line.strip()
-        if line:
+        if line and not _is_noise(line):
             output_lines.append(line)
             if callback:
                 callback(line)
@@ -69,7 +75,7 @@ def run_winget_uninstall(winget_id: str, callback=None, process_holder: list = N
     output_lines = []
     for line in process.stdout:
         line = line.strip()
-        if line:
+        if line and not _is_noise(line):
             output_lines.append(line)
             if callback:
                 callback(line)

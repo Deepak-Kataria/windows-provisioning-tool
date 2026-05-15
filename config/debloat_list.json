@@ -6,8 +6,8 @@
         {"name": "Xbox Identity Provider",      "package": "Microsoft.XboxIdentityProvider",            "category": "Gaming"},
         {"name": "Xbox Speech To Text",         "package": "Microsoft.XboxSpeechToTextOverlay",         "category": "Gaming"},
         {"name": "Xbox Game Pass",              "package": "Microsoft.GamingApp",                       "category": "Gaming"},
+        {"name": "Xbox TCUI",                   "package": "Microsoft.Xbox.TCUI",                       "category": "Gaming"},
         {"name": "Solitaire Collection",        "package": "Microsoft.MicrosoftSolitaireCollection",    "category": "Gaming"},
-        {"name": "March of Empires",            "package": "A278AB0D.MarchofEmpires",                   "category": "Gaming"},
         {"name": "Candy Crush",                 "package": "king.com.CandyCrush*",                      "category": "Gaming"},
 
         {"name": "Bing News",                   "package": "Microsoft.BingNews",                        "category": "Bing Apps"},
@@ -40,6 +40,9 @@
         {"name": "Power Automate Desktop",      "package": "Microsoft.PowerAutomateDesktop",            "category": "Microsoft Apps"},
         {"name": "To Do",                       "package": "Microsoft.Todos",                           "category": "Microsoft Apps"},
         {"name": "Sticky Notes",                "package": "Microsoft.MicrosoftStickyNotes",            "category": "Microsoft Apps"},
+        {"name": "New Outlook",                 "package": "Microsoft.OutlookForWindows",               "category": "Microsoft Apps"},
+        {"name": "Dev Home",                    "package": "Microsoft.Windows.DevHome",                 "category": "Microsoft Apps"},
+        {"name": "M365 Companions",             "package": "Microsoft.M365Companions",                  "category": "Microsoft Apps"},
 
         {"name": "Mail and Calendar",           "package": "microsoft.windowscommunicationsapps",       "category": "Windows Built-in"},
         {"name": "Maps",                        "package": "Microsoft.WindowsMaps",                     "category": "Windows Built-in"},
@@ -50,6 +53,7 @@
 
         {"name": "Skype",                       "package": "Microsoft.SkypeApp",                        "category": "Communication"},
         {"name": "Microsoft Teams (Personal)",  "package": "MicrosoftTeams",                            "category": "Communication"},
+        {"name": "Microsoft Teams (New)",       "package": "MSTeams",                                   "category": "Communication"},
         {"name": "People",                      "package": "Microsoft.People",                          "category": "Communication"},
         {"name": "Phone Link",                  "package": "Microsoft.YourPhone",                       "category": "Communication"},
 
@@ -63,8 +67,9 @@
         {"name": "Instagram",                   "package": "*.Instagram",                               "category": "Third-party"},
         {"name": "Twitter / X",                 "package": "*.Twitter",                                 "category": "Third-party"},
         {"name": "TikTok",                      "package": "*.TikTok",                                  "category": "Third-party"},
-        {"name": "Netflix",                     "package": "*.Netflix",                                  "category": "Third-party"},
+        {"name": "Netflix",                     "package": "*.Netflix",                                 "category": "Third-party"},
         {"name": "LinkedIn",                    "package": "*.LinkedIn",                                "category": "Third-party"},
+        {"name": "WhatsApp",                    "package": "5319275A.WhatsAppDesktop",                  "category": "Third-party"},
         {"name": "XING",                        "package": "XINGAG.XING",                               "category": "Third-party"}
     ]
 }

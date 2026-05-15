@@ -1,3 +1,4 @@
+import re
 import customtkinter as ctk
 import json
 import os
@@ -7,6 +8,16 @@ from modules.utils import resolve_installer_path
 from modules.logger import log
 
 CONFIG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config")
+
+_DL_RE = re.compile(
+    r'([\d,]+\.?\d*)\s*(B|KB|MB|GB)\s*/\s*([\d,]+\.?\d*)\s*(B|KB|MB|GB)',
+    re.IGNORECASE
+)
+_UNITS = {'B': 1, 'KB': 1024, 'MB': 1024 ** 2, 'GB': 1024 ** 3}
+
+
+def _to_bytes(val_str, unit):
+    return float(val_str.replace(',', '')) * _UNITS[unit.upper()]
 
 
 class AppsTab(ctk.CTkFrame):
@@ -60,20 +71,25 @@ class AppsTab(ctk.CTkFrame):
                       text_color="gray", font=ctk.CTkFont(size=11)).grid(
             row=1, column=0, sticky="w", padx=16, pady=(0, 6))
 
-        scroll_common = ctk.CTkScrollableFrame(common_frame, height=180)
+        scroll_common = ctk.CTkScrollableFrame(common_frame, height=260)
         scroll_common.grid(row=2, column=0, padx=10, pady=(0, 6), sticky="ew")
+        scroll_common.grid_columnconfigure(0, weight=1)
 
         for i, app in enumerate(self.common_data["common_apps"]):
             var = ctk.BooleanVar(value=True)
-            label = app["name"] + (" [Local]" if "installer" in app else "")
-            ctk.CTkCheckBox(scroll_common, text=label, variable=var).grid(
-                row=i, column=0, sticky="w", padx=8, pady=3)
-            key = app.get("winget_id") or app["name"]
-            self.common_checkboxes[key] = (var, app)
+            self._app_row(scroll_common, i, app, var, self.common_checkboxes)
 
-        self.common_btn = ctk.CTkButton(common_frame, text="Install Common Apps",
+        common_btn_row = ctk.CTkFrame(common_frame, fg_color="transparent")
+        common_btn_row.grid(row=3, column=0, padx=12, pady=(4, 8), sticky="w")
+        self.common_btn = ctk.CTkButton(common_btn_row, text="Install Selected",
                                          command=self._install_common)
-        self.common_btn.grid(row=3, column=0, padx=16, pady=(4, 8), sticky="w")
+        self.common_btn.grid(row=0, column=0, padx=(0, 6))
+        ctk.CTkButton(common_btn_row, text="Select All", width=90,
+                       command=lambda: [v.set(True) for v, _ in self.common_checkboxes.values()]).grid(
+            row=0, column=1, padx=4)
+        ctk.CTkButton(common_btn_row, text="Deselect All", width=90,
+                       command=lambda: [v.set(False) for v, _ in self.common_checkboxes.values()]).grid(
+            row=0, column=2, padx=4)
 
         common_prog = ctk.CTkFrame(common_frame, fg_color="transparent")
         common_prog.grid(row=4, column=0, padx=16, pady=(0, 12), sticky="ew")
@@ -103,13 +119,22 @@ class AppsTab(ctk.CTkFrame):
                            command=self._on_team_change).grid(
             row=2, column=0, padx=16, pady=(0, 6), sticky="w")
 
-        self.scroll_team = ctk.CTkScrollableFrame(team_frame, height=180)
+        self.scroll_team = ctk.CTkScrollableFrame(team_frame, height=260)
         self.scroll_team.grid(row=3, column=0, padx=10, pady=(0, 6), sticky="ew")
+        self.scroll_team.grid_columnconfigure(0, weight=1)
         self._populate_team_apps(self.team_var.get())
 
-        self.team_btn = ctk.CTkButton(team_frame, text="Install Team Apps",
+        team_btn_row = ctk.CTkFrame(team_frame, fg_color="transparent")
+        team_btn_row.grid(row=4, column=0, padx=12, pady=(4, 8), sticky="w")
+        self.team_btn = ctk.CTkButton(team_btn_row, text="Install Selected",
                                        command=self._install_team)
-        self.team_btn.grid(row=4, column=0, padx=16, pady=(4, 8), sticky="w")
+        self.team_btn.grid(row=0, column=0, padx=(0, 6))
+        ctk.CTkButton(team_btn_row, text="Select All", width=90,
+                       command=lambda: [v.set(True) for v, _ in self.team_checkboxes.values()]).grid(
+            row=0, column=1, padx=4)
+        ctk.CTkButton(team_btn_row, text="Deselect All", width=90,
+                       command=lambda: [v.set(False) for v, _ in self.team_checkboxes.values()]).grid(
+            row=0, column=2, padx=4)
 
         team_prog = ctk.CTkFrame(team_frame, fg_color="transparent")
         team_prog.grid(row=5, column=0, padx=16, pady=(0, 12), sticky="ew")
@@ -165,9 +190,29 @@ class AppsTab(ctk.CTkFrame):
         self.local_status = ctk.CTkLabel(local_prog, text="", font=ctk.CTkFont(size=11), anchor="w")
         self.local_status.grid(row=1, column=0, sticky="w", pady=(2, 0))
 
+        # ── Download progress (hidden until active) ────────────────
+        self.dl_frame = ctk.CTkFrame(w, fg_color="transparent")
+        self.dl_frame.grid(row=2, column=0, columnspan=2, padx=10, pady=(0, 4), sticky="ew")
+        self.dl_frame.grid_columnconfigure(1, weight=1)
+        self.dl_frame.grid_remove()
+
+        ctk.CTkLabel(self.dl_frame, text="Downloading:",
+                      font=ctk.CTkFont(size=12, weight="bold")).grid(
+            row=0, column=0, padx=(16, 8), pady=(10, 2), sticky="w")
+        self.dl_app_label = ctk.CTkLabel(self.dl_frame, text="",
+                                          font=ctk.CTkFont(size=12))
+        self.dl_app_label.grid(row=0, column=1, pady=(10, 2), sticky="w")
+        self.dl_size_label = ctk.CTkLabel(self.dl_frame, text="",
+                                           font=ctk.CTkFont(size=11), text_color="gray")
+        self.dl_size_label.grid(row=0, column=2, padx=(8, 16), pady=(10, 2), sticky="e")
+
+        self.dl_bar = ctk.CTkProgressBar(self.dl_frame, height=14)
+        self.dl_bar.grid(row=1, column=0, columnspan=3, padx=16, pady=(2, 10), sticky="ew")
+        self.dl_bar.set(0)
+
         # ── Output ────────────────────────────────────────────────
         output_hdr = ctk.CTkFrame(w, fg_color="transparent")
-        output_hdr.grid(row=2, column=0, columnspan=2, padx=10, pady=(4, 2), sticky="ew")
+        output_hdr.grid(row=3, column=0, columnspan=2, padx=10, pady=(4, 2), sticky="ew")
         output_hdr.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(output_hdr, text="Output",
                       font=ctk.CTkFont(size=14, weight="bold")).grid(row=0, column=0, sticky="w")
@@ -177,62 +222,59 @@ class AppsTab(ctk.CTkFrame):
         self.stop_btn.grid(row=0, column=1, sticky="e")
 
         self.output_box = ctk.CTkTextbox(w, height=120, state="disabled")
-        self.output_box.grid(row=3, column=0, columnspan=2, padx=10, pady=(0, 4), sticky="ew")
+        self.output_box.grid(row=4, column=0, columnspan=2, padx=10, pady=(0, 10), sticky="ew")
 
-        # ── Rollback / Uninstall card ─────────────────────────────
-        uninstall_card = ctk.CTkFrame(w)
-        uninstall_card.grid(row=4, column=0, columnspan=2, padx=10, pady=(0, 10), sticky="ew")
-        uninstall_card.grid_columnconfigure(0, weight=1)
+    def _app_row(self, parent, row_idx, app, var, checkbox_dict):
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.grid(row=row_idx, column=0, sticky="ew", pady=2, padx=4)
+        row.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(uninstall_card, text="Rollback / Uninstall Apps",
-                      font=ctk.CTkFont(size=14, weight="bold")).grid(
-            row=0, column=0, sticky="w", padx=16, pady=(14, 2))
-        ctk.CTkLabel(uninstall_card, text="Select apps to uninstall. All common and team apps listed.",
-                      text_color="gray", font=ctk.CTkFont(size=11)).grid(
-            row=1, column=0, sticky="w", padx=16, pady=(0, 8))
+        ctk.CTkCheckBox(row, text=app["name"], variable=var).grid(
+            row=0, column=0, sticky="w")
 
-        all_apps = {}
-        for app in self.common_data["common_apps"]:
-            if "winget_id" in app:
-                all_apps[app["winget_id"]] = app["name"]
-        for apps_list in self.teams_data["teams"].values():
-            for app in apps_list:
-                if "winget_id" in app:
-                    all_apps[app["winget_id"]] = app["name"]
+        if app.get("winget_id"):
+            ctk.CTkButton(
+                row, text="Uninstall", width=75, height=24,
+                fg_color="#555", hover_color="#E65100",
+                font=ctk.CTkFont(size=11),
+                command=lambda wid=app["winget_id"], n=app["name"]: self._uninstall_single(wid, n)
+            ).grid(row=0, column=1, padx=(8, 0))
 
-        uninstall_scroll = ctk.CTkScrollableFrame(uninstall_card, height=120)
-        uninstall_scroll.grid(row=2, column=0, padx=10, pady=(0, 8), sticky="ew")
-        uninstall_scroll.grid_columnconfigure(0, weight=1)
+        checkbox_dict[app.get("winget_id", app["name"])] = (var, app)
 
-        col_count = 3
-        for idx, (wid, name) in enumerate(sorted(all_apps.items(), key=lambda x: x[1])):
-            var = ctk.BooleanVar(value=False)
-            ctk.CTkCheckBox(uninstall_scroll, text=name, variable=var).grid(
-                row=idx // col_count, column=idx % col_count, sticky="w", padx=8, pady=3)
-            self.uninstall_checkboxes[wid] = (var, name)
+    # ── Download progress helpers ──────────────────────────────────
 
-        rb_btn_row = ctk.CTkFrame(uninstall_card, fg_color="transparent")
-        rb_btn_row.grid(row=3, column=0, padx=16, pady=(0, 8), sticky="w")
+    def _show_dl_frame(self, app_name):
+        self.dl_app_label.configure(text=app_name)
+        self.dl_bar.set(0)
+        self.dl_size_label.configure(text="")
+        self.dl_frame.grid()
 
-        self.uninstall_btn = ctk.CTkButton(rb_btn_row, text="Uninstall Selected",
-                                            fg_color="#FF8F00", hover_color="#E65100",
-                                            command=self._uninstall_selected)
-        self.uninstall_btn.grid(row=0, column=0, padx=(0, 8))
-        ctk.CTkButton(rb_btn_row, text="Select All", width=90,
-                       command=lambda: [v.set(True) for v, _ in self.uninstall_checkboxes.values()]).grid(
-            row=0, column=1, padx=4)
-        ctk.CTkButton(rb_btn_row, text="Deselect All", width=90,
-                       command=lambda: [v.set(False) for v, _ in self.uninstall_checkboxes.values()]).grid(
-            row=0, column=2, padx=4)
+    def _hide_dl_frame(self):
+        self.dl_frame.grid_remove()
+        self.dl_bar.set(0)
+        self.dl_app_label.configure(text="")
+        self.dl_size_label.configure(text="")
 
-        uninstall_prog = ctk.CTkFrame(uninstall_card, fg_color="transparent")
-        uninstall_prog.grid(row=4, column=0, padx=16, pady=(0, 12), sticky="ew")
-        uninstall_prog.grid_columnconfigure(0, weight=1)
-        self.uninstall_bar = ctk.CTkProgressBar(uninstall_prog, height=12)
-        self.uninstall_bar.grid(row=0, column=0, sticky="ew")
-        self.uninstall_bar.set(0)
-        self.uninstall_status = ctk.CTkLabel(uninstall_prog, text="", font=ctk.CTkFont(size=11), anchor="w")
-        self.uninstall_status.grid(row=1, column=0, sticky="w", pady=(2, 0))
+    def _update_dl_bar(self, pct, size_text):
+        self.dl_bar.set(pct)
+        self.dl_size_label.configure(text=size_text)
+
+    def _make_dl_callback(self, name):
+        def cb(line):
+            m = _DL_RE.search(line)
+            if m:
+                try:
+                    cur = _to_bytes(m.group(1), m.group(2))
+                    tot = _to_bytes(m.group(3), m.group(4))
+                    pct = min(cur / tot, 1.0) if tot > 0 else 0
+                    size_text = f"{m.group(1)} {m.group(2)} / {m.group(3)} {m.group(4)}"
+                    self.after(0, self._update_dl_bar, pct, size_text)
+                except Exception:
+                    pass
+            else:
+                self._safe_append(line)
+        return cb
 
     # ── Helpers ────────────────────────────────────────────────────
 
@@ -242,11 +284,7 @@ class AppsTab(ctk.CTkFrame):
         self.team_checkboxes.clear()
         for i, app in enumerate(self.teams_data["teams"].get(team_name, [])):
             var = ctk.BooleanVar(value=True)
-            label = app["name"] + (" [Local]" if "installer" in app else "")
-            ctk.CTkCheckBox(self.scroll_team, text=label, variable=var).grid(
-                row=i, column=0, sticky="w", padx=8, pady=3)
-            key = app.get("winget_id") or app["name"]
-            self.team_checkboxes[key] = (var, app)
+            self._app_row(self.scroll_team, i, app, var, self.team_checkboxes)
 
     def _on_team_change(self, team_name):
         self._populate_team_apps(team_name)
@@ -261,7 +299,7 @@ class AppsTab(ctk.CTkFrame):
         self.after(0, self._append_output, text)
 
     def _set_all_buttons(self, state):
-        for btn in (self.common_btn, self.team_btn, self.local_btn, self.uninstall_btn):
+        for btn in (self.common_btn, self.team_btn, self.local_btn):
             btn.configure(state=state)
         self.stop_btn.configure(state="normal" if state == "disabled" else "disabled")
 
@@ -428,6 +466,7 @@ class AppsTab(ctk.CTkFrame):
                 name = app["name"]
                 _t = f"Installing {i + 1}/{total}: {name}"
                 self.after(0, lambda t=_t: status_label.configure(text=t))
+                self.after(0, self._show_dl_frame, name)
                 self._safe_append(f"Installing {name}...")
 
                 holder = []
@@ -445,7 +484,7 @@ class AppsTab(ctk.CTkFrame):
                                                 callback=self._safe_append, process_holder=holder)
                 else:
                     log(f"Installing {name} ({app['winget_id']})")
-                    rc, _ = run_winget(app["winget_id"], callback=self._safe_append,
+                    rc, _ = run_winget(app["winget_id"], callback=self._make_dl_callback(name),
                                        process_holder=holder)
                 if holder:
                     self._current_process = holder[0]
@@ -471,6 +510,7 @@ class AppsTab(ctk.CTkFrame):
 
             def finish():
                 bar.set(1.0)
+                self._hide_dl_frame()
                 status_label.configure(text=f"Done. {succeeded} ok, {failed} failed.")
                 self._running = False
                 self._stop_requested = False
@@ -563,61 +603,29 @@ class AppsTab(ctk.CTkFrame):
 
         threading.Thread(target=task, daemon=True).start()
 
-    # ── Uninstall ──────────────────────────────────────────────────
+    # ── Inline Uninstall ───────────────────────────────────────────
 
-    def _uninstall_selected(self):
+    def _uninstall_single(self, winget_id, name):
         if self._running:
+            self._append_output("Wait for current operation to finish.")
             return
-        selected = [(wid, name) for wid, (var, name) in self.uninstall_checkboxes.items() if var.get()]
-        if not selected:
-            self._append_output("No apps selected for uninstall.")
-            return
-
         self._running = True
         self._set_all_buttons("disabled")
-        total = len(selected)
-        self.uninstall_bar.set(0)
-        self.uninstall_status.configure(text=f"Starting uninstall of {total} app(s)...")
-        self._append_output(f"Uninstalling {total} app(s)...")
-        log(f"Apps: uninstalling {total} apps")
+        self._append_output(f"Uninstalling {name}...")
+        log(f"Uninstalling {name} ({winget_id})")
 
         def task():
-            succeeded = 0
-            failed = 0
-            for i, (winget_id, name) in enumerate(selected):
-                if self._stop_requested:
-                    self._safe_append("Uninstall stopped.")
-                    break
-                _t = f"Uninstalling {i + 1}/{total}: {name}"
-                self.after(0, lambda t=_t: self.uninstall_status.configure(text=t))
-                self._safe_append(f"Uninstalling {name}...")
-                log(f"Uninstalling {name} ({winget_id})")
-
-                holder = []
-                rc, _ = run_winget_uninstall(winget_id, callback=self._safe_append,
-                                              process_holder=holder)
-                if holder:
-                    self._current_process = holder[0]
-
-                if rc == 0:
-                    succeeded += 1
-                    self._safe_append(f"  OK: {name}")
-                    log(f"Uninstalled {name}", "success")
-                else:
-                    failed += 1
-                    self._safe_append(f"  FAILED: {name} (exit {rc})")
-                    log(f"Uninstall failed {name}", "error")
-
-                self.after(0, self.uninstall_bar.set, (i + 1) / total)
+            rc, _ = run_winget_uninstall(winget_id, callback=self._safe_append)
+            if rc == 0:
+                self._safe_append(f"  OK: {name} uninstalled.")
+                log(f"Uninstalled {name}", "success")
+            else:
+                self._safe_append(f"  FAILED: {name} (exit {rc})")
+                log(f"Uninstall failed {name}", "error")
 
             def finish():
-                self.uninstall_bar.set(1.0)
-                self.uninstall_status.configure(text=f"Done. {succeeded} ok, {failed} failed.")
-                self._running = False
-                self._stop_requested = False
-                self._current_process = None
                 self._set_all_buttons("normal")
-                self._show_done_dialog(succeeded, failed, total, "uninstalled")
+                self._running = False
 
             self.after(0, finish)
 

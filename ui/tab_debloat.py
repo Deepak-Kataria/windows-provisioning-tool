@@ -204,6 +204,7 @@ class DebloatTab(ctk.CTkFrame):
 
         total = len(selected)
         counts = {"removed": 0, "not_found": 0, "errors": 0, "done": 0}
+        state = {"log_file": ""}
 
         def on_line(line):
             if line.startswith("REMOVED:"):
@@ -215,6 +216,10 @@ class DebloatTab(ctk.CTkFrame):
             elif line.startswith("ERROR:"):
                 counts["errors"] += 1
                 counts["done"] += 1
+            elif line.startswith("LOG:"):
+                state["log_file"] = line[4:].strip()
+                self.after(0, self._append_output, line)
+                return
             self.after(0, self._append_output, line)
             frac = counts["done"] / total
             self.after(0, self.progress_bar.set, frac)
@@ -233,11 +238,12 @@ class DebloatTab(ctk.CTkFrame):
                 self.progress_label.configure(text="Done.")
                 self._set_buttons("normal")
                 self._running = False
+                log_note = f"\n\nLog saved to:\n{state['log_file']}" if state["log_file"] else ""
                 self._show_done_dialog("Debloat Complete",
                     f"Removed:   {counts['removed']}\n"
                     f"Not found: {counts['not_found']}\n"
                     f"Errors:    {counts['errors']}\n"
-                    f"Total:     {total}")
+                    f"Total:     {total}{log_note}")
             self.after(0, finish)
 
         threading.Thread(target=task, daemon=True).start()
