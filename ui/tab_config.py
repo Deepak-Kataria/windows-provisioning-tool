@@ -1,8 +1,10 @@
 import customtkinter as ctk
 import subprocess
 import threading
+import tkinter.filedialog as filedialog
 from modules.runner import run_inline_powershell
 from modules.logger import log
+from modules import sheets_sync
 
 
 FEATURES = [
@@ -173,12 +175,109 @@ class ConfigTab(ctk.CTkFrame):
                                          anchor="w", wraplength=900)
         self._desc_label.grid(row=0, column=0, padx=12, pady=8, sticky="w")
 
+        # ── Google Sheets Sync ─────────────────────────────────────
+        sheets_frame = ctk.CTkFrame(wrap)
+        sheets_frame.grid(row=2, column=0, columnspan=2, padx=10, pady=(0, 6), sticky="ew")
+        sheets_frame.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(sheets_frame, text="Google Sheets Sync",
+                      font=ctk.CTkFont(size=14, weight="bold"), anchor="w").grid(
+            row=0, column=0, columnspan=3, padx=14, pady=(14, 6), sticky="w")
+
+        ctk.CTkLabel(sheets_frame, text="Sheet ID:").grid(
+            row=1, column=0, padx=14, pady=5, sticky="w")
+        self._sheet_id_entry = ctk.CTkEntry(sheets_frame, width=360,
+                                             placeholder_text="Paste Google Sheet ID from URL")
+        self._sheet_id_entry.grid(row=1, column=1, padx=6, pady=5, sticky="w")
+
+        ctk.CTkLabel(sheets_frame, text="Service Account Key:").grid(
+            row=2, column=0, padx=14, pady=5, sticky="w")
+        key_row = ctk.CTkFrame(sheets_frame, fg_color="transparent")
+        key_row.grid(row=2, column=1, padx=6, pady=5, sticky="w")
+        self._key_file_entry = ctk.CTkEntry(key_row, width=290,
+                                             placeholder_text="Path to service account JSON key")
+        self._key_file_entry.grid(row=0, column=0)
+        ctk.CTkButton(key_row, text="Browse...", width=80,
+                       command=self._browse_key_file).grid(row=0, column=1, padx=(8, 0))
+
+        ctk.CTkLabel(sheets_frame, text="Worksheet Name:").grid(
+            row=3, column=0, padx=14, pady=5, sticky="w")
+        self._ws_name_entry = ctk.CTkEntry(sheets_frame, width=200,
+                                            placeholder_text="Provisioning Log")
+        self._ws_name_entry.grid(row=3, column=1, padx=6, pady=5, sticky="w")
+
+        btn_row = ctk.CTkFrame(sheets_frame, fg_color="transparent")
+        btn_row.grid(row=4, column=0, columnspan=3, padx=14, pady=(8, 14), sticky="w")
+        ctk.CTkButton(btn_row, text="Save Settings", width=130,
+                       command=self._save_sheets_config).grid(row=0, column=0, padx=(0, 8))
+        ctk.CTkButton(btn_row, text="Test Connection", width=140,
+                       command=self._test_sheets_connection).grid(row=0, column=1)
+        self._sheets_status = ctk.CTkLabel(btn_row, text="", text_color="gray",
+                                            font=ctk.CTkFont(size=11))
+        self._sheets_status.grid(row=0, column=2, padx=(14, 0))
+
+        self._load_sheets_config()
+
         ctk.CTkLabel(wrap, text="Output",
                       font=ctk.CTkFont(size=13, weight="bold"), anchor="w").grid(
-            row=2, column=0, columnspan=2, padx=10, pady=(0, 2), sticky="w")
+            row=3, column=0, columnspan=2, padx=10, pady=(0, 2), sticky="w")
         self._output = ctk.CTkTextbox(wrap, height=130, state="disabled",
                                        font=ctk.CTkFont(family="Courier New", size=11))
-        self._output.grid(row=3, column=0, columnspan=2, padx=10, pady=(0, 10), sticky="ew")
+        self._output.grid(row=4, column=0, columnspan=2, padx=10, pady=(0, 10), sticky="ew")
+
+    # ── Google Sheets helpers ──────────────────────────────────────
+
+    def _load_sheets_config(self):
+        try:
+            import json, os
+            from modules.paths import get_base_dir
+            path = os.path.join(get_base_dir(), "config", "sheets_config.json")
+            with open(path) as f:
+                cfg = json.load(f)
+            if cfg.get("sheet_id"):
+                self._sheet_id_entry.insert(0, cfg["sheet_id"])
+            if cfg.get("key_file"):
+                self._key_file_entry.insert(0, cfg["key_file"])
+            ws = cfg.get("worksheet_name", "")
+            if ws:
+                self._ws_name_entry.insert(0, ws)
+        except Exception:
+            pass
+
+    def _browse_key_file(self):
+        path = filedialog.askopenfilename(
+            title="Select Service Account JSON Key",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+        )
+        if path:
+            self._key_file_entry.delete(0, "end")
+            self._key_file_entry.insert(0, path)
+
+    def _save_sheets_config(self):
+        cfg = {
+            "sheet_id":       sheets_sync._extract_sheet_id(self._sheet_id_entry.get().strip()),
+            "key_file":       self._key_file_entry.get().strip(),
+            "worksheet_name": self._ws_name_entry.get().strip() or "Provisioning Log",
+        }
+        try:
+            sheets_sync.save_config(cfg)
+            self._sheets_status.configure(text="Saved.", text_color="#81C784")
+        except Exception as e:
+            self._sheets_status.configure(text=f"Save failed: {e}", text_color="#E57373")
+
+    def _test_sheets_connection(self):
+        self._save_sheets_config()
+        self._sheets_status.configure(text="Testing...", text_color="gray")
+
+        def task():
+            ok, msg = sheets_sync.test_connection()
+
+            def done():
+                self._sheets_status.configure(
+                    text=msg, text_color="#81C784" if ok else "#E57373")
+            self.after(0, done)
+
+        threading.Thread(target=task, daemon=True).start()
 
     # ── Helpers ────────────────────────────────────────────────────
 

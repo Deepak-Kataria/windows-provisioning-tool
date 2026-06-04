@@ -5,6 +5,7 @@ import threading
 import tkinter.messagebox as msgbox
 from modules.runner import run_powershell, run_powershell_with_secret
 from modules.logger import log
+from modules import sheets_sync
 
 CONFIG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config")
 
@@ -23,9 +24,14 @@ class SystemTab(ctk.CTkFrame):
 
     def _build(self):
         self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+        scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        scroll.grid(row=0, column=0, sticky="nsew")
+        scroll.grid_columnconfigure(0, weight=1)
 
         # --- Rename Section ---
-        rename_frame = ctk.CTkFrame(self)
+        rename_frame = ctk.CTkFrame(scroll)
         rename_frame.grid(row=0, column=0, padx=20, pady=(20, 10), sticky="ew")
         rename_frame.grid_columnconfigure(1, weight=1)
 
@@ -77,9 +83,97 @@ class SystemTab(ctk.CTkFrame):
                                     command=self._apply_rename)
         rename_btn.grid(row=5, column=0, columnspan=3, padx=20, pady=(8, 16), sticky="w")
 
+        # --- Operator & System Details Section ---
+        details_frame = ctk.CTkFrame(scroll)
+        details_frame.grid(row=1, column=0, padx=20, pady=(0, 10), sticky="ew")
+        details_frame.grid_columnconfigure(1, weight=1)
+        details_frame.grid_columnconfigure(3, weight=1)
+
+        header_row = ctk.CTkFrame(details_frame, fg_color="transparent")
+        header_row.grid(row=0, column=0, columnspan=4, sticky="ew", padx=20, pady=(16, 8))
+        header_row.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(header_row, text="Operator & System Details",
+                      font=ctk.CTkFont(size=16, weight="bold")).grid(
+            row=0, column=0, sticky="w")
+        self._fetch_details_btn = ctk.CTkButton(header_row, text="Fetch Details",
+                                                 width=130, command=self._fetch_system_details)
+        self._fetch_details_btn.grid(row=0, column=1, sticky="e")
+
+        # Left column — Operator info
+        ctk.CTkLabel(details_frame, text="Operator Username:").grid(
+            row=1, column=0, padx=(20, 4), pady=5, sticky="w")
+        self.op_user_entry = ctk.CTkEntry(details_frame, width=220,
+                                           placeholder_text="Windows username")
+        self.op_user_entry.grid(row=1, column=1, padx=(0, 20), pady=5, sticky="w")
+
+        ctk.CTkLabel(details_frame, text="Operator Email(s):").grid(
+            row=2, column=0, padx=(20, 4), pady=5, sticky="nw")
+        self.op_email_box = ctk.CTkTextbox(details_frame, width=220, height=58,
+                                            font=ctk.CTkFont(size=12))
+        self.op_email_box.grid(row=2, column=1, padx=(0, 20), pady=5, sticky="w")
+
+        ctk.CTkLabel(details_frame, text="System Model:").grid(
+            row=3, column=0, padx=(20, 4), pady=5, sticky="w")
+        self.sys_model_entry = ctk.CTkEntry(details_frame, width=220,
+                                             placeholder_text="e.g. Dell Latitude 5420")
+        self.sys_model_entry.grid(row=3, column=1, padx=(0, 20), pady=5, sticky="w")
+
+        ctk.CTkLabel(details_frame, text="System Serial No.:").grid(
+            row=4, column=0, padx=(20, 4), pady=5, sticky="w")
+        self.sys_serial_entry = ctk.CTkEntry(details_frame, width=220,
+                                              placeholder_text="BIOS serial number")
+        self.sys_serial_entry.grid(row=4, column=1, padx=(0, 20), pady=5, sticky="w")
+
+        # Right column — Hardware & OS
+        ctk.CTkLabel(details_frame, text="Processor:").grid(
+            row=1, column=2, padx=(20, 4), pady=5, sticky="w")
+        self.sys_cpu_entry = ctk.CTkEntry(details_frame, width=220,
+                                           placeholder_text="CPU model")
+        self.sys_cpu_entry.grid(row=1, column=3, padx=(0, 20), pady=5, sticky="w")
+
+        ctk.CTkLabel(details_frame, text="RAM:").grid(
+            row=2, column=2, padx=(20, 4), pady=5, sticky="w")
+        self.sys_ram_entry = ctk.CTkEntry(details_frame, width=220,
+                                           placeholder_text="Total RAM")
+        self.sys_ram_entry.grid(row=2, column=3, padx=(0, 20), pady=5, sticky="w")
+
+        ctk.CTkLabel(details_frame, text="Disk Size:").grid(
+            row=3, column=2, padx=(20, 4), pady=5, sticky="w")
+        self.sys_disk_entry = ctk.CTkEntry(details_frame, width=220,
+                                            placeholder_text="Primary disk")
+        self.sys_disk_entry.grid(row=3, column=3, padx=(0, 20), pady=5, sticky="w")
+
+        ctk.CTkLabel(details_frame, text="Display / GPU:").grid(
+            row=4, column=2, padx=(20, 4), pady=5, sticky="w")
+        self.sys_display_entry = ctk.CTkEntry(details_frame, width=220,
+                                               placeholder_text="GPU / display adapter")
+        self.sys_display_entry.grid(row=4, column=3, padx=(0, 20), pady=5, sticky="w")
+
+        ctk.CTkLabel(details_frame, text="Windows Version:").grid(
+            row=5, column=0, padx=(20, 4), pady=5, sticky="w")
+        self.sys_winver_entry = ctk.CTkEntry(details_frame, width=220,
+                                              placeholder_text="e.g. Windows 11 Pro")
+        self.sys_winver_entry.grid(row=5, column=1, padx=(0, 20), pady=5, sticky="w")
+
+        ctk.CTkLabel(details_frame, text="Last Windows Update:").grid(
+            row=5, column=2, padx=(20, 4), pady=5, sticky="w")
+        self.sys_lastupdate_entry = ctk.CTkEntry(details_frame, width=220,
+                                                  placeholder_text="Date of last installed update")
+        self.sys_lastupdate_entry.grid(row=5, column=3, padx=(0, 20), pady=5, sticky="w")
+
+        ctk.CTkLabel(details_frame, text="Monitor Details:").grid(
+            row=6, column=0, padx=(20, 4), pady=5, sticky="nw")
+        self.sys_monitor_box = ctk.CTkTextbox(details_frame, width=500, height=58,
+                                               font=ctk.CTkFont(size=12))
+        self.sys_monitor_box.grid(row=6, column=1, columnspan=3, padx=(0, 20), pady=5, sticky="w")
+
+        self._sync_sheet_btn = ctk.CTkButton(details_frame, text="Sync to Google Sheet",
+                                              width=180, command=self._sync_to_sheet)
+        self._sync_sheet_btn.grid(row=7, column=0, columnspan=2, padx=20, pady=(8, 16), sticky="w")
+
         # --- Domain Join Section ---
-        domain_frame = ctk.CTkFrame(self)
-        domain_frame.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
+        domain_frame = ctk.CTkFrame(scroll)
+        domain_frame.grid(row=2, column=0, padx=20, pady=10, sticky="ew")
         domain_frame.grid_columnconfigure(1, weight=1)
 
         ctk.CTkLabel(domain_frame, text="Join Domain",
@@ -140,11 +234,72 @@ class SystemTab(ctk.CTkFrame):
         join_btn.grid(row=6, column=0, columnspan=2, padx=20, pady=(8, 16), sticky="w")
 
         # Output log
-        ctk.CTkLabel(self, text="Output",
+        ctk.CTkLabel(scroll, text="Output",
                       font=ctk.CTkFont(size=14, weight="bold")).grid(
-            row=2, column=0, padx=20, pady=(10, 4), sticky="w")
-        self.output_box = ctk.CTkTextbox(self, height=140, state="disabled")
-        self.output_box.grid(row=3, column=0, padx=20, pady=(0, 20), sticky="ew")
+            row=3, column=0, padx=20, pady=(10, 4), sticky="w")
+        self.output_box = ctk.CTkTextbox(scroll, height=140, state="disabled")
+        self.output_box.grid(row=4, column=0, padx=20, pady=(0, 20), sticky="ew")
+
+    def _fetch_system_details(self):
+        self._fetch_details_btn.configure(text="Fetching...", state="disabled")
+
+        def task():
+            rc, out = run_powershell("get_system_info.ps1", [], callback=None)
+
+            def apply():
+                self._fetch_details_btn.configure(text="Fetch Details", state="normal")
+                if rc != 0:
+                    first_err = next((l for l in out.splitlines() if l.startswith("ERROR")), out)
+                    self._append_output(f"Fetch details failed: {first_err}")
+                    return
+
+                data = {}
+                for line in out.splitlines():
+                    if ":" in line:
+                        k, _, v = line.partition(":")
+                        data[k.strip()] = v.strip()
+
+                def _set(entry, key):
+                    val = data.get(key, "")
+                    entry.delete(0, "end")
+                    if val:
+                        entry.insert(0, val)
+
+                def _set_box(box, text):
+                    box.configure(state="normal")
+                    box.delete("1.0", "end")
+                    if text:
+                        box.insert("1.0", text)
+
+                _set(self.op_user_entry,        "USER")
+                _set(self.sys_model_entry,      "MODEL")
+                _set(self.sys_serial_entry,     "SERIAL")
+                _set(self.sys_cpu_entry,        "PROCESSOR")
+                _set(self.sys_ram_entry,        "RAM")
+                _set(self.sys_disk_entry,       "DISK")
+                _set(self.sys_display_entry,    "DISPLAY")
+                _set(self.sys_winver_entry,     "WIN_VERSION")
+                _set(self.sys_lastupdate_entry, "WIN_LAST_UPDATE")
+
+                # Emails — one per line
+                emails_raw = data.get("EMAILS", "")
+                emails_text = "\n".join(e for e in emails_raw.split("|") if e) if emails_raw else ""
+                _set_box(self.op_email_box, emails_text)
+
+                # Monitors — numbered, one per line
+                count = int(data.get("MONITOR_COUNT", "0") or "0")
+                mon_lines = []
+                for i in range(1, count + 1):
+                    val = data.get(f"MONITOR_{i}", "")
+                    if val:
+                        mon_lines.append(f"Monitor {i}: {val}")
+                _set_box(self.sys_monitor_box, "\n".join(mon_lines) if mon_lines else "N/A")
+
+                self._append_output("System details fetched.")
+
+            self.after(0, apply)
+
+        threading.Thread(target=task, daemon=True).start()
 
     def _auto_generate_name(self):
         self._autogen_btn.configure(text="Reading hardware...", state="disabled")
@@ -198,15 +353,54 @@ class SystemTab(ctk.CTkFrame):
 
         new_name = f"{prefix}-{dtype}-{number}"
         self._append_output(f"Renaming computer to {new_name}...")
-        log(f"Renaming computer to {new_name}")
+
+        details = self._get_details_row(new_name)
+        log(f"Renaming computer to {new_name} | operator={details.get('operator')} serial={details.get('serial')}")
 
         def task():
             rc, out = run_powershell("rename_computer.ps1", ["-NewName", new_name],
                                       callback=self._safe_append)
             if rc == 0:
                 log(f"Computer renamed to {new_name}", "success")
+                if sheets_sync.is_configured():
+                    ok, msg = sheets_sync.append_row(self._get_details_row(new_name))
+                    self._safe_append(f"Sheet sync: {msg}")
             else:
                 log(f"Rename failed: {out}", "error")
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _get_details_row(self, computer_name=""):
+        return {
+            "computer_name": computer_name,
+            "operator":      self.op_user_entry.get().strip(),
+            "email":         self.op_email_box.get("1.0", "end").strip().replace("\n", " | "),
+            "model":         self.sys_model_entry.get().strip(),
+            "serial":        self.sys_serial_entry.get().strip(),
+            "processor":     self.sys_cpu_entry.get().strip(),
+            "ram":           self.sys_ram_entry.get().strip(),
+            "disk":          self.sys_disk_entry.get().strip(),
+            "display":       self.sys_display_entry.get().strip(),
+            "windows":       self.sys_winver_entry.get().strip(),
+            "last_update":   self.sys_lastupdate_entry.get().strip(),
+            "monitors":      self.sys_monitor_box.get("1.0", "end").strip().replace("\n", " | "),
+        }
+
+    def _sync_to_sheet(self, computer_name=""):
+        self._sync_sheet_btn.configure(text="Syncing...", state="disabled")
+        data = self._get_details_row(computer_name)
+
+        def task():
+            ok, msg = sheets_sync.append_row(data)
+
+            def done():
+                self._sync_sheet_btn.configure(text="Sync to Google Sheet", state="normal")
+                self._append_output(f"Sheet sync: {msg}")
+                if ok:
+                    msgbox.showinfo("Google Sheets", f"Row added successfully.\n\n{msg}")
+                else:
+                    msgbox.showerror("Google Sheets Sync Failed", msg)
+            self.after(0, done)
 
         threading.Thread(target=task, daemon=True).start()
 
