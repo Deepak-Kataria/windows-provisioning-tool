@@ -79,9 +79,21 @@ class SystemTab(ctk.CTkFrame):
                                            text_color="#4FC3F7")
         self.preview_label.grid(row=4, column=1, columnspan=2, padx=8, pady=8, sticky="w")
 
+        ctk.CTkLabel(rename_frame, text="Domain Username:",
+                     text_color="gray").grid(row=5, column=0, padx=20, pady=(12, 4), sticky="w")
+        self.domain_user_entry = ctk.CTkEntry(rename_frame, width=220,
+                                               placeholder_text="DOMAIN\\username  (domain-joined only)")
+        self.domain_user_entry.grid(row=5, column=1, columnspan=2, padx=8, pady=(12, 4), sticky="w")
+
+        ctk.CTkLabel(rename_frame, text="Domain Password:",
+                     text_color="gray").grid(row=6, column=0, padx=20, pady=(4, 8), sticky="w")
+        self.domain_pass_entry = ctk.CTkEntry(rename_frame, width=220, show="*",
+                                               placeholder_text="Required when domain-joined")
+        self.domain_pass_entry.grid(row=6, column=1, columnspan=2, padx=8, pady=(4, 8), sticky="w")
+
         rename_btn = ctk.CTkButton(rename_frame, text="Apply Rename",
                                     command=self._apply_rename)
-        rename_btn.grid(row=5, column=0, columnspan=3, padx=20, pady=(8, 16), sticky="w")
+        rename_btn.grid(row=7, column=0, columnspan=3, padx=20, pady=(8, 16), sticky="w")
 
         # --- Operator & System Details Section ---
         details_frame = ctk.CTkFrame(scroll)
@@ -357,18 +369,97 @@ class SystemTab(ctk.CTkFrame):
         details = self._get_details_row(new_name)
         log(f"Renaming computer to {new_name} | operator={details.get('operator')} serial={details.get('serial')}")
 
+        domain_user = self.domain_user_entry.get().strip()
+        domain_pass = self.domain_pass_entry.get()
+
         def task():
-            rc, out = run_powershell("rename_computer.ps1", ["-NewName", new_name],
-                                      callback=self._safe_append)
-            if rc == 0:
+            if domain_user:
+                rc, out = run_powershell_with_secret(
+                    "rename_computer.ps1",
+                    ["-NewName", new_name, "-DomainUser", domain_user],
+                    domain_pass,
+                    callback=self._safe_append
+                )
+            else:
+                rc, out = run_powershell("rename_computer.ps1", ["-NewName", new_name],
+                                          callback=self._safe_append)
+            if rc == 0 and "SUCCESS" in out:
                 log(f"Computer renamed to {new_name}", "success")
                 if sheets_sync.is_configured():
                     ok, msg = sheets_sync.append_row(self._get_details_row(new_name))
                     self._safe_append(f"Sheet sync: {msg}")
+                self.after(0, self._prompt_reboot, new_name)
             else:
-                log(f"Rename failed: {out}", "error")
+                err = out.strip() or "Unknown error"
+                log(f"Rename failed: {err}", "error")
+                self._safe_append(f"ERROR: {err}")
+                self.after(0, msgbox.showerror, "Rename Failed", f"Could not rename computer:\n\n{err}")
 
         threading.Thread(target=task, daemon=True).start()
+
+    def _prompt_reboot(self, new_name):
+        import subprocess
+        dlg = ctk.CTkToplevel(self)
+        dlg.title("Reboot Required")
+        dlg.resizable(False, False)
+        dlg.grab_set()
+        dlg.lift()
+        dlg.attributes("-topmost", True)
+
+        ctk.CTkLabel(dlg, text="Computer Renamed Successfully",
+                     font=ctk.CTkFont(size=15, weight="bold")).pack(padx=30, pady=(24, 6))
+        ctk.CTkLabel(dlg, text=f"New name:  {new_name}",
+                     font=ctk.CTkFont(size=13)).pack(padx=30, pady=(0, 12))
+        ctk.CTkLabel(dlg, text="A restart is required for the name change to take effect.",
+                     text_color="gray").pack(padx=30, pady=(0, 16))
+
+        countdown_var = ctk.StringVar(value="Restarting in 30 seconds...")
+        ctk.CTkLabel(dlg, textvariable=countdown_var,
+                     font=ctk.CTkFont(size=13, weight="bold"),
+                     text_color="#FF8A65").pack(padx=30, pady=(0, 20))
+
+        btn_row = ctk.CTkFrame(dlg, fg_color="transparent")
+        btn_row.pack(padx=30, pady=(0, 24))
+
+        cancelled = [False]
+
+        def do_restart():
+            cancelled[0] = True
+            dlg.destroy()
+            subprocess.Popen(["shutdown", "/r", "/t", "0"],
+                             creationflags=subprocess.CREATE_NO_WINDOW)
+
+        def cancel():
+            cancelled[0] = True
+            subprocess.Popen(["shutdown", "/a"],
+                             creationflags=subprocess.CREATE_NO_WINDOW)
+            dlg.destroy()
+
+        ctk.CTkButton(btn_row, text="Cancel Restart", width=130,
+                      fg_color="#555", hover_color="#444",
+                      command=cancel).grid(row=0, column=0, padx=(0, 12))
+        ctk.CTkButton(btn_row, text="Restart Now", width=130,
+                      fg_color="#E53935", hover_color="#B71C1C",
+                      command=do_restart).grid(row=0, column=1)
+
+        # Schedule shutdown in 30s, then tick countdown
+        subprocess.Popen(["shutdown", "/r", "/t", "30", "/c",
+                          f"Restarting to apply computer name: {new_name}"],
+                         creationflags=subprocess.CREATE_NO_WINDOW)
+
+        remaining = [30]
+
+        def tick():
+            if cancelled[0] or not dlg.winfo_exists():
+                return
+            remaining[0] -= 1
+            if remaining[0] <= 0:
+                dlg.destroy()
+                return
+            countdown_var.set(f"Restarting in {remaining[0]} seconds...")
+            dlg.after(1000, tick)
+
+        dlg.after(1000, tick)
 
     def _get_details_row(self, computer_name=""):
         return {

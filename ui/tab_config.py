@@ -1,7 +1,6 @@
 import customtkinter as ctk
 import subprocess
 import threading
-import tkinter.filedialog as filedialog
 from modules.runner import run_inline_powershell
 from modules.logger import log
 from modules import sheets_sync
@@ -190,24 +189,14 @@ class ConfigTab(ctk.CTkFrame):
                                              placeholder_text="Paste Google Sheet ID from URL")
         self._sheet_id_entry.grid(row=1, column=1, padx=6, pady=5, sticky="w")
 
-        ctk.CTkLabel(sheets_frame, text="Service Account Key:").grid(
-            row=2, column=0, padx=14, pady=5, sticky="w")
-        key_row = ctk.CTkFrame(sheets_frame, fg_color="transparent")
-        key_row.grid(row=2, column=1, padx=6, pady=5, sticky="w")
-        self._key_file_entry = ctk.CTkEntry(key_row, width=290,
-                                             placeholder_text="Path to service account JSON key")
-        self._key_file_entry.grid(row=0, column=0)
-        ctk.CTkButton(key_row, text="Browse...", width=80,
-                       command=self._browse_key_file).grid(row=0, column=1, padx=(8, 0))
-
         ctk.CTkLabel(sheets_frame, text="Worksheet Name:").grid(
-            row=3, column=0, padx=14, pady=5, sticky="w")
+            row=2, column=0, padx=14, pady=5, sticky="w")
         self._ws_name_entry = ctk.CTkEntry(sheets_frame, width=200,
                                             placeholder_text="Provisioning Log")
-        self._ws_name_entry.grid(row=3, column=1, padx=6, pady=5, sticky="w")
+        self._ws_name_entry.grid(row=2, column=1, padx=6, pady=5, sticky="w")
 
         btn_row = ctk.CTkFrame(sheets_frame, fg_color="transparent")
-        btn_row.grid(row=4, column=0, columnspan=3, padx=14, pady=(8, 14), sticky="w")
+        btn_row.grid(row=3, column=0, columnspan=3, padx=14, pady=(8, 14), sticky="w")
         ctk.CTkButton(btn_row, text="Save Settings", width=130,
                        command=self._save_sheets_config).grid(row=0, column=0, padx=(0, 8))
         ctk.CTkButton(btn_row, text="Test Connection", width=140,
@@ -236,27 +225,15 @@ class ConfigTab(ctk.CTkFrame):
                 cfg = json.load(f)
             if cfg.get("sheet_id"):
                 self._sheet_id_entry.insert(0, cfg["sheet_id"])
-            if cfg.get("key_file"):
-                self._key_file_entry.insert(0, cfg["key_file"])
             ws = cfg.get("worksheet_name", "")
             if ws:
                 self._ws_name_entry.insert(0, ws)
         except Exception:
             pass
 
-    def _browse_key_file(self):
-        path = filedialog.askopenfilename(
-            title="Select Service Account JSON Key",
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
-        )
-        if path:
-            self._key_file_entry.delete(0, "end")
-            self._key_file_entry.insert(0, path)
-
     def _save_sheets_config(self):
         cfg = {
             "sheet_id":       sheets_sync._extract_sheet_id(self._sheet_id_entry.get().strip()),
-            "key_file":       self._key_file_entry.get().strip(),
             "worksheet_name": self._ws_name_entry.get().strip() or "Provisioning Log",
         }
         try:
