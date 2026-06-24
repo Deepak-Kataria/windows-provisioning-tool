@@ -1,16 +1,26 @@
+param(
+    [switch]$DevMode
+)
+
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # ── MODE 1: Run built exe (preferred - no Python needed) ──────────────────
 # --onefile exe self-extracts to local temp, so UNC path is fine.
+# Skipped when -DevMode is passed (run_dev.bat) so source-code changes are
+# picked up without rebuilding the exe.
 $ExePath = Join-Path $ScriptDir "dist\IT-Provisioning-Tool.exe"
-if (Test-Path $ExePath) {
+if (-not $DevMode -and (Test-Path $ExePath)) {
     Write-Host "Launching IT-Provisioning-Tool.exe..."
     Start-Process $ExePath
     exit
 }
 
 # ── MODE 2: Dev mode - run from source (requires Python) ──────────────────
-Write-Host "No built exe found. Running from source (dev mode)..."
+if ($DevMode) {
+    Write-Host "Dev mode: running from source..."
+} else {
+    Write-Host "No built exe found. Running from source (dev mode)..."
+}
 
 $RunDir = $ScriptDir
 

@@ -8,6 +8,9 @@ try {
     $rawUser  = $cs.UserName
     $username = if ($rawUser -match '\\') { $rawUser -replace '.*\\', '' } else { $rawUser }
 
+    # Brand / manufacturer
+    $brand    = $cs.Manufacturer.Trim()
+
     # System model — stored in $sysModel to avoid collision with monitor model variable
     $sysModel = $cs.Model.Trim()
 
@@ -111,6 +114,7 @@ try {
     } catch {}
 
     Write-Output "USER:$username"
+    Write-Output "BRAND:$brand"
     Write-Output "MODEL:$sysModel"
     Write-Output "SERIAL:$sysSerial"
     Write-Output "PROCESSOR:$processor"

@@ -10,6 +10,16 @@ from modules import sheets_sync
 CONFIG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config")
 
 
+def _parse_system_info(out: str) -> dict:
+    """Parse the KEY: value lines from get_system_info.ps1 output."""
+    data = {}
+    for line in out.splitlines():
+        if ":" in line:
+            k, _, v = line.partition(":")
+            data[k.strip()] = v.strip()
+    return data
+
+
 class SystemTab(ctk.CTkFrame):
     def __init__(self, master, role):
         super().__init__(master, fg_color="transparent")
@@ -81,15 +91,15 @@ class SystemTab(ctk.CTkFrame):
 
         ctk.CTkLabel(rename_frame, text="Domain Username:",
                      text_color="gray").grid(row=5, column=0, padx=20, pady=(12, 4), sticky="w")
-        self.domain_user_entry = ctk.CTkEntry(rename_frame, width=220,
+        self.rename_user_entry = ctk.CTkEntry(rename_frame, width=220,
                                                placeholder_text="DOMAIN\\username  (domain-joined only)")
-        self.domain_user_entry.grid(row=5, column=1, columnspan=2, padx=8, pady=(12, 4), sticky="w")
+        self.rename_user_entry.grid(row=5, column=1, columnspan=2, padx=8, pady=(12, 4), sticky="w")
 
         ctk.CTkLabel(rename_frame, text="Domain Password:",
                      text_color="gray").grid(row=6, column=0, padx=20, pady=(4, 8), sticky="w")
-        self.domain_pass_entry = ctk.CTkEntry(rename_frame, width=220, show="*",
+        self.rename_pass_entry = ctk.CTkEntry(rename_frame, width=220, show="*",
                                                placeholder_text="Required when domain-joined")
-        self.domain_pass_entry.grid(row=6, column=1, columnspan=2, padx=8, pady=(4, 8), sticky="w")
+        self.rename_pass_entry.grid(row=6, column=1, columnspan=2, padx=8, pady=(4, 8), sticky="w")
 
         rename_btn = ctk.CTkButton(rename_frame, text="Apply Rename",
                                     command=self._apply_rename)
@@ -111,77 +121,93 @@ class SystemTab(ctk.CTkFrame):
                                                  width=130, command=self._fetch_system_details)
         self._fetch_details_btn.grid(row=0, column=1, sticky="e")
 
+        # Computer Name — the key used to find/update this machine's row in
+        # the Google Sheet. Pre-filled with the current OS hostname, updated
+        # after "Apply Rename", and editable.
+        ctk.CTkLabel(details_frame, text="Computer Name:").grid(
+            row=1, column=0, padx=(20, 4), pady=5, sticky="w")
+        self.sys_computer_name_entry = ctk.CTkEntry(details_frame, width=220,
+                                                      placeholder_text="e.g. RCS-DT-7FA78902")
+        self.sys_computer_name_entry.insert(0, os.environ.get("COMPUTERNAME", ""))
+        self.sys_computer_name_entry.grid(row=1, column=1, padx=(0, 20), pady=5, sticky="w")
+
         # Left column — Operator info
         ctk.CTkLabel(details_frame, text="Operator Username:").grid(
-            row=1, column=0, padx=(20, 4), pady=5, sticky="w")
+            row=2, column=0, padx=(20, 4), pady=5, sticky="w")
         self.op_user_entry = ctk.CTkEntry(details_frame, width=220,
                                            placeholder_text="Windows username")
-        self.op_user_entry.grid(row=1, column=1, padx=(0, 20), pady=5, sticky="w")
+        self.op_user_entry.grid(row=2, column=1, padx=(0, 20), pady=5, sticky="w")
 
         ctk.CTkLabel(details_frame, text="Operator Email(s):").grid(
-            row=2, column=0, padx=(20, 4), pady=5, sticky="nw")
+            row=3, column=0, padx=(20, 4), pady=5, sticky="nw")
         self.op_email_box = ctk.CTkTextbox(details_frame, width=220, height=58,
                                             font=ctk.CTkFont(size=12))
-        self.op_email_box.grid(row=2, column=1, padx=(0, 20), pady=5, sticky="w")
+        self.op_email_box.grid(row=3, column=1, padx=(0, 20), pady=5, sticky="w")
 
         ctk.CTkLabel(details_frame, text="System Model:").grid(
-            row=3, column=0, padx=(20, 4), pady=5, sticky="w")
+            row=4, column=0, padx=(20, 4), pady=5, sticky="w")
         self.sys_model_entry = ctk.CTkEntry(details_frame, width=220,
                                              placeholder_text="e.g. Dell Latitude 5420")
-        self.sys_model_entry.grid(row=3, column=1, padx=(0, 20), pady=5, sticky="w")
+        self.sys_model_entry.grid(row=4, column=1, padx=(0, 20), pady=5, sticky="w")
 
         ctk.CTkLabel(details_frame, text="System Serial No.:").grid(
-            row=4, column=0, padx=(20, 4), pady=5, sticky="w")
+            row=5, column=0, padx=(20, 4), pady=5, sticky="w")
         self.sys_serial_entry = ctk.CTkEntry(details_frame, width=220,
                                               placeholder_text="BIOS serial number")
-        self.sys_serial_entry.grid(row=4, column=1, padx=(0, 20), pady=5, sticky="w")
+        self.sys_serial_entry.grid(row=5, column=1, padx=(0, 20), pady=5, sticky="w")
 
         # Right column — Hardware & OS
         ctk.CTkLabel(details_frame, text="Processor:").grid(
-            row=1, column=2, padx=(20, 4), pady=5, sticky="w")
+            row=2, column=2, padx=(20, 4), pady=5, sticky="w")
         self.sys_cpu_entry = ctk.CTkEntry(details_frame, width=220,
                                            placeholder_text="CPU model")
-        self.sys_cpu_entry.grid(row=1, column=3, padx=(0, 20), pady=5, sticky="w")
+        self.sys_cpu_entry.grid(row=2, column=3, padx=(0, 20), pady=5, sticky="w")
 
         ctk.CTkLabel(details_frame, text="RAM:").grid(
-            row=2, column=2, padx=(20, 4), pady=5, sticky="w")
+            row=3, column=2, padx=(20, 4), pady=5, sticky="w")
         self.sys_ram_entry = ctk.CTkEntry(details_frame, width=220,
                                            placeholder_text="Total RAM")
-        self.sys_ram_entry.grid(row=2, column=3, padx=(0, 20), pady=5, sticky="w")
+        self.sys_ram_entry.grid(row=3, column=3, padx=(0, 20), pady=5, sticky="w")
 
         ctk.CTkLabel(details_frame, text="Disk Size:").grid(
-            row=3, column=2, padx=(20, 4), pady=5, sticky="w")
+            row=4, column=2, padx=(20, 4), pady=5, sticky="w")
         self.sys_disk_entry = ctk.CTkEntry(details_frame, width=220,
                                             placeholder_text="Primary disk")
-        self.sys_disk_entry.grid(row=3, column=3, padx=(0, 20), pady=5, sticky="w")
+        self.sys_disk_entry.grid(row=4, column=3, padx=(0, 20), pady=5, sticky="w")
 
         ctk.CTkLabel(details_frame, text="Display / GPU:").grid(
-            row=4, column=2, padx=(20, 4), pady=5, sticky="w")
+            row=5, column=2, padx=(20, 4), pady=5, sticky="w")
         self.sys_display_entry = ctk.CTkEntry(details_frame, width=220,
                                                placeholder_text="GPU / display adapter")
-        self.sys_display_entry.grid(row=4, column=3, padx=(0, 20), pady=5, sticky="w")
+        self.sys_display_entry.grid(row=5, column=3, padx=(0, 20), pady=5, sticky="w")
+
+        ctk.CTkLabel(details_frame, text="Brand Name:").grid(
+            row=6, column=0, padx=(20, 4), pady=5, sticky="w")
+        self.sys_brand_entry = ctk.CTkEntry(details_frame, width=220,
+                                             placeholder_text="e.g. Dell, HP, Lenovo")
+        self.sys_brand_entry.grid(row=6, column=1, padx=(0, 20), pady=5, sticky="w")
 
         ctk.CTkLabel(details_frame, text="Windows Version:").grid(
-            row=5, column=0, padx=(20, 4), pady=5, sticky="w")
+            row=7, column=0, padx=(20, 4), pady=5, sticky="w")
         self.sys_winver_entry = ctk.CTkEntry(details_frame, width=220,
                                               placeholder_text="e.g. Windows 11 Pro")
-        self.sys_winver_entry.grid(row=5, column=1, padx=(0, 20), pady=5, sticky="w")
+        self.sys_winver_entry.grid(row=7, column=1, padx=(0, 20), pady=5, sticky="w")
 
         ctk.CTkLabel(details_frame, text="Last Windows Update:").grid(
-            row=5, column=2, padx=(20, 4), pady=5, sticky="w")
+            row=7, column=2, padx=(20, 4), pady=5, sticky="w")
         self.sys_lastupdate_entry = ctk.CTkEntry(details_frame, width=220,
                                                   placeholder_text="Date of last installed update")
-        self.sys_lastupdate_entry.grid(row=5, column=3, padx=(0, 20), pady=5, sticky="w")
+        self.sys_lastupdate_entry.grid(row=7, column=3, padx=(0, 20), pady=5, sticky="w")
 
         ctk.CTkLabel(details_frame, text="Monitor Details:").grid(
-            row=6, column=0, padx=(20, 4), pady=5, sticky="nw")
+            row=8, column=0, padx=(20, 4), pady=5, sticky="nw")
         self.sys_monitor_box = ctk.CTkTextbox(details_frame, width=500, height=58,
                                                font=ctk.CTkFont(size=12))
-        self.sys_monitor_box.grid(row=6, column=1, columnspan=3, padx=(0, 20), pady=5, sticky="w")
+        self.sys_monitor_box.grid(row=8, column=1, columnspan=3, padx=(0, 20), pady=5, sticky="w")
 
         self._sync_sheet_btn = ctk.CTkButton(details_frame, text="Sync to Google Sheet",
                                               width=180, command=self._sync_to_sheet)
-        self._sync_sheet_btn.grid(row=7, column=0, columnspan=2, padx=20, pady=(8, 16), sticky="w")
+        self._sync_sheet_btn.grid(row=9, column=0, columnspan=2, padx=20, pady=(8, 16), sticky="w")
 
         # --- Domain Join Section ---
         domain_frame = ctk.CTkFrame(scroll)
@@ -230,16 +256,16 @@ class SystemTab(ctk.CTkFrame):
         # Domain Username
         ctk.CTkLabel(domain_frame, text="Domain Username:").grid(
             row=4, column=0, padx=20, pady=6, sticky="w")
-        self.domain_user_entry = ctk.CTkEntry(domain_frame, width=280,
-                                               placeholder_text="Admin username")
-        self.domain_user_entry.grid(row=4, column=1, padx=20, pady=6, sticky="w")
+        self.join_user_entry = ctk.CTkEntry(domain_frame, width=280,
+                                             placeholder_text="Admin username")
+        self.join_user_entry.grid(row=4, column=1, padx=20, pady=6, sticky="w")
 
         # Domain Password
         ctk.CTkLabel(domain_frame, text="Domain Password:").grid(
             row=5, column=0, padx=20, pady=6, sticky="w")
-        self.domain_pass_entry = ctk.CTkEntry(domain_frame, width=280,
-                                               placeholder_text="Admin password", show="*")
-        self.domain_pass_entry.grid(row=5, column=1, padx=20, pady=6, sticky="w")
+        self.join_pass_entry = ctk.CTkEntry(domain_frame, width=280,
+                                             placeholder_text="Admin password", show="*")
+        self.join_pass_entry.grid(row=5, column=1, padx=20, pady=6, sticky="w")
 
         join_btn = ctk.CTkButton(domain_frame, text="Join Domain",
                                   command=self._join_domain)
@@ -264,54 +290,51 @@ class SystemTab(ctk.CTkFrame):
                     first_err = next((l for l in out.splitlines() if l.startswith("ERROR")), out)
                     self._append_output(f"Fetch details failed: {first_err}")
                     return
-
-                data = {}
-                for line in out.splitlines():
-                    if ":" in line:
-                        k, _, v = line.partition(":")
-                        data[k.strip()] = v.strip()
-
-                def _set(entry, key):
-                    val = data.get(key, "")
-                    entry.delete(0, "end")
-                    if val:
-                        entry.insert(0, val)
-
-                def _set_box(box, text):
-                    box.configure(state="normal")
-                    box.delete("1.0", "end")
-                    if text:
-                        box.insert("1.0", text)
-
-                _set(self.op_user_entry,        "USER")
-                _set(self.sys_model_entry,      "MODEL")
-                _set(self.sys_serial_entry,     "SERIAL")
-                _set(self.sys_cpu_entry,        "PROCESSOR")
-                _set(self.sys_ram_entry,        "RAM")
-                _set(self.sys_disk_entry,       "DISK")
-                _set(self.sys_display_entry,    "DISPLAY")
-                _set(self.sys_winver_entry,     "WIN_VERSION")
-                _set(self.sys_lastupdate_entry, "WIN_LAST_UPDATE")
-
-                # Emails — one per line
-                emails_raw = data.get("EMAILS", "")
-                emails_text = "\n".join(e for e in emails_raw.split("|") if e) if emails_raw else ""
-                _set_box(self.op_email_box, emails_text)
-
-                # Monitors — numbered, one per line
-                count = int(data.get("MONITOR_COUNT", "0") or "0")
-                mon_lines = []
-                for i in range(1, count + 1):
-                    val = data.get(f"MONITOR_{i}", "")
-                    if val:
-                        mon_lines.append(f"Monitor {i}: {val}")
-                _set_box(self.sys_monitor_box, "\n".join(mon_lines) if mon_lines else "N/A")
-
+                self._apply_fetched_details_to_ui(_parse_system_info(out))
                 self._append_output("System details fetched.")
 
             self.after(0, apply)
 
         threading.Thread(target=task, daemon=True).start()
+
+    def _apply_fetched_details_to_ui(self, data: dict):
+        """Populate the Operator & System Details fields from get_system_info.ps1 output."""
+        def _set(entry, key):
+            val = data.get(key, "")
+            entry.delete(0, "end")
+            if val:
+                entry.insert(0, val)
+
+        def _set_box(box, text):
+            box.configure(state="normal")
+            box.delete("1.0", "end")
+            if text:
+                box.insert("1.0", text)
+
+        _set(self.op_user_entry,        "USER")
+        _set(self.sys_brand_entry,      "BRAND")
+        _set(self.sys_model_entry,      "MODEL")
+        _set(self.sys_serial_entry,     "SERIAL")
+        _set(self.sys_cpu_entry,        "PROCESSOR")
+        _set(self.sys_ram_entry,        "RAM")
+        _set(self.sys_disk_entry,       "DISK")
+        _set(self.sys_display_entry,    "DISPLAY")
+        _set(self.sys_winver_entry,     "WIN_VERSION")
+        _set(self.sys_lastupdate_entry, "WIN_LAST_UPDATE")
+
+        # Emails — one per line
+        emails_raw = data.get("EMAILS", "")
+        emails_text = "\n".join(e for e in emails_raw.split("|") if e) if emails_raw else ""
+        _set_box(self.op_email_box, emails_text)
+
+        # Monitors — numbered, one per line
+        count = int(data.get("MONITOR_COUNT", "0") or "0")
+        mon_lines = []
+        for i in range(1, count + 1):
+            val = data.get(f"MONITOR_{i}", "")
+            if val:
+                mon_lines.append(f"Monitor {i}: {val}")
+        _set_box(self.sys_monitor_box, "\n".join(mon_lines) if mon_lines else "N/A")
 
     def _auto_generate_name(self):
         self._autogen_btn.configure(text="Reading hardware...", state="disabled")
@@ -354,6 +377,72 @@ class SystemTab(ctk.CTkFrame):
     def _safe_append(self, text):
         self.after(0, self._append_output, text)
 
+    def _set_computer_name_field(self, name: str):
+        """Fill the Computer Name field after a successful rename (UI only — no sheet sync)."""
+        self.sys_computer_name_entry.delete(0, "end")
+        self.sys_computer_name_entry.insert(0, name)
+
+    def _fill_domain_credential_fields(self, user: str):
+        """Persist the domain username used for a successful credential-prompt rename."""
+        self.rename_user_entry.delete(0, "end")
+        self.rename_user_entry.insert(0, user)
+
+    def _ask_domain_credentials_blocking(self):
+        """Show a modal credential dialog from the background rename thread.
+
+        Runs the dialog on the main thread via .after() and blocks the calling
+        thread until it's closed. Returns (username, password) or None if cancelled.
+        """
+        result = {}
+        event = threading.Event()
+
+        def show():
+            dlg = ctk.CTkToplevel(self)
+            dlg.title("Domain Credentials Required")
+            dlg.resizable(False, False)
+            dlg.grab_set()
+            dlg.lift()
+            dlg.attributes("-topmost", True)
+
+            ctk.CTkLabel(dlg, text="Domain Admin Credentials Required",
+                         font=ctk.CTkFont(size=15, weight="bold")).pack(padx=30, pady=(24, 6))
+            ctk.CTkLabel(dlg, text="This computer is domain-joined. Renaming it requires\n"
+                                    "an account with permission to update the AD computer object.",
+                         text_color="gray", justify="center").pack(padx=30, pady=(0, 16))
+
+            user_entry = ctk.CTkEntry(dlg, width=260, placeholder_text="DOMAIN\\username")
+            user_entry.pack(padx=30, pady=(0, 8))
+            pass_entry = ctk.CTkEntry(dlg, width=260, show="*", placeholder_text="Password")
+            pass_entry.pack(padx=30, pady=(0, 16))
+            user_entry.focus_set()
+
+            btn_row = ctk.CTkFrame(dlg, fg_color="transparent")
+            btn_row.pack(padx=30, pady=(0, 24))
+
+            def submit():
+                u = user_entry.get().strip()
+                p = pass_entry.get()
+                if u and p:
+                    result["creds"] = (u, p)
+                dlg.destroy()
+
+            def cancel():
+                dlg.destroy()
+
+            ctk.CTkButton(btn_row, text="Cancel", width=110,
+                          fg_color="#555", hover_color="#444",
+                          command=cancel).grid(row=0, column=0, padx=(0, 12))
+            ctk.CTkButton(btn_row, text="Continue", width=110,
+                          command=submit).grid(row=0, column=1)
+
+            pass_entry.bind("<Return>", lambda e: submit())
+            dlg.protocol("WM_DELETE_WINDOW", cancel)
+            dlg.bind("<Destroy>", lambda e: event.set())
+
+        self.after(0, show)
+        event.wait()
+        return result.get("creds")
+
     def _apply_rename(self):
         prefix = self.prefix_entry.get().strip().upper()
         number = self.number_entry.get().strip().zfill(3)
@@ -365,12 +454,10 @@ class SystemTab(ctk.CTkFrame):
 
         new_name = f"{prefix}-{dtype}-{number}"
         self._append_output(f"Renaming computer to {new_name}...")
+        log(f"Renaming computer to {new_name}")
 
-        details = self._get_details_row(new_name)
-        log(f"Renaming computer to {new_name} | operator={details.get('operator')} serial={details.get('serial')}")
-
-        domain_user = self.domain_user_entry.get().strip()
-        domain_pass = self.domain_pass_entry.get()
+        domain_user = self.rename_user_entry.get().strip()
+        domain_pass = self.rename_pass_entry.get()
 
         def task():
             if domain_user:
@@ -383,11 +470,35 @@ class SystemTab(ctk.CTkFrame):
             else:
                 rc, out = run_powershell("rename_computer.ps1", ["-NewName", new_name],
                                           callback=self._safe_append)
+                if rc != 0 and "Access is denied" in out:
+                    is_domain_joined = "RENAME_CONTEXT: DOMAIN_JOINED" in out
+                    if not is_domain_joined:
+                        log(f"Rename to {new_name} failed — access denied (non-domain)", "error")
+                        self._safe_append("ERROR: Access denied — tool must run as administrator.")
+                        self.after(0, msgbox.showerror, "Rename Failed",
+                                   "Access denied.\n\n"
+                                   "Ensure the provisioning tool is running as administrator.")
+                        return
+                    self._safe_append("Access denied — domain admin credentials required.")
+                    creds = self._ask_domain_credentials_blocking()
+                    if not creds:
+                        log(f"Rename to {new_name} cancelled — no domain credentials", "error")
+                        self._safe_append("ERROR: Rename cancelled — domain credentials required.")
+                        self.after(0, msgbox.showerror, "Rename Failed",
+                                   "This computer is domain-joined.\n\n"
+                                   "Renaming requires domain admin credentials.")
+                        return
+                    user, pwd = creds
+                    self.after(0, self._fill_domain_credential_fields, user)
+                    rc, out = run_powershell_with_secret(
+                        "rename_computer.ps1",
+                        ["-NewName", new_name, "-DomainUser", user],
+                        pwd,
+                        callback=self._safe_append
+                    )
             if rc == 0 and "SUCCESS" in out:
                 log(f"Computer renamed to {new_name}", "success")
-                if sheets_sync.is_configured():
-                    ok, msg = sheets_sync.append_row(self._get_details_row(new_name))
-                    self._safe_append(f"Sheet sync: {msg}")
+                self.after(0, self._set_computer_name_field, new_name)
                 self.after(0, self._prompt_reboot, new_name)
             else:
                 err = out.strip() or "Unknown error"
@@ -461,11 +572,12 @@ class SystemTab(ctk.CTkFrame):
 
         dlg.after(1000, tick)
 
-    def _get_details_row(self, computer_name=""):
+    def _get_details_row(self):
         return {
-            "computer_name": computer_name,
+            "computer_name": self.sys_computer_name_entry.get().strip(),
             "operator":      self.op_user_entry.get().strip(),
             "email":         self.op_email_box.get("1.0", "end").strip().replace("\n", " | "),
+            "brand":         self.sys_brand_entry.get().strip(),
             "model":         self.sys_model_entry.get().strip(),
             "serial":        self.sys_serial_entry.get().strip(),
             "processor":     self.sys_cpu_entry.get().strip(),
@@ -477,9 +589,9 @@ class SystemTab(ctk.CTkFrame):
             "monitors":      self.sys_monitor_box.get("1.0", "end").strip().replace("\n", " | "),
         }
 
-    def _sync_to_sheet(self, computer_name=""):
+    def _sync_to_sheet(self):
         self._sync_sheet_btn.configure(text="Syncing...", state="disabled")
-        data = self._get_details_row(computer_name)
+        data = self._get_details_row()
 
         def task():
             ok, msg = sheets_sync.append_row(data)
@@ -498,8 +610,8 @@ class SystemTab(ctk.CTkFrame):
     def _browse_ous(self):
         domain = self.domain_name_entry.get().strip()
         server_ip = self.dc_ip_entry.get().strip()
-        username = self.domain_user_entry.get().strip()
-        password = self.domain_pass_entry.get()
+        username = self.join_user_entry.get().strip()
+        password = self.join_pass_entry.get()
 
         missing = []
         if not domain:    missing.append("Domain Name")
@@ -569,8 +681,8 @@ class SystemTab(ctk.CTkFrame):
         domain = self.domain_name_entry.get().strip()
         server_ip = self.dc_ip_entry.get().strip()
         ou = self.ou_entry.get().strip()
-        username = self.domain_user_entry.get().strip()
-        password = self.domain_pass_entry.get()
+        username = self.join_user_entry.get().strip()
+        password = self.join_pass_entry.get()
 
         if not domain or not username or not password:
             self._append_output("ERROR: Domain name, username and password are required.")

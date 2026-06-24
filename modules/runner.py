@@ -25,7 +25,8 @@ def run_powershell(script_name: str, args: list = None, callback=None):
         cmd = ["powershell.exe", "-ExecutionPolicy", "Bypass", "-File", local_path]
         if args:
             cmd.extend(args)
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                   creationflags=subprocess.CREATE_NO_WINDOW)
         output_lines = []
         for line in process.stdout:
             line = line.strip()
@@ -45,7 +46,8 @@ def run_winget(winget_id: str, callback=None, process_holder: list = None):
            "--accept-package-agreements", "--accept-source-agreements",
            "--disable-interactivity"]
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                text=True, encoding="utf-8", errors="replace")
+                                text=True, encoding="utf-8", errors="replace",
+                                creationflags=subprocess.CREATE_NO_WINDOW)
     if process_holder is not None:
         process_holder.append(process)
     output_lines = []
@@ -63,7 +65,8 @@ def run_winget_uninstall(winget_id: str, callback=None, process_holder: list = N
     cmd = ["winget", "uninstall", "--id", winget_id, "--silent",
            "--accept-source-agreements", "--disable-interactivity"]
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                text=True, encoding="utf-8", errors="replace")
+                                text=True, encoding="utf-8", errors="replace",
+                                creationflags=subprocess.CREATE_NO_WINDOW)
     if process_holder is not None:
         process_holder.append(process)
     output_lines = []
@@ -83,7 +86,8 @@ def run_powershell_with_secret(script_name: str, args: list, secret: str, callba
     try:
         cmd = ["powershell.exe", "-ExecutionPolicy", "Bypass", "-File", local_path] + args
         process = subprocess.Popen(
-            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+            creationflags=subprocess.CREATE_NO_WINDOW
         )
         process.stdin.write(secret + "\n")
         process.stdin.close()
@@ -158,7 +162,8 @@ def run_local_installer(path: str, args: list = None, callback=None, process_hol
         process = subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
     else:
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                    text=True, encoding="utf-8", errors="replace")
+                                    text=True, encoding="utf-8", errors="replace",
+                                    creationflags=subprocess.CREATE_NO_WINDOW)
 
     if process_holder is not None:
         process_holder.append(process)
@@ -179,7 +184,8 @@ def run_local_installer(path: str, args: list = None, callback=None, process_hol
 def run_inline_powershell(script: str, callback=None):
     cmd = ["powershell.exe", "-ExecutionPolicy", "Bypass", "-Command", script]
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-                                encoding="utf-8", errors="replace")
+                                encoding="utf-8", errors="replace",
+                                creationflags=subprocess.CREATE_NO_WINDOW)
     output_lines = []
     for line in process.stdout:
         line = line.strip()

@@ -17,7 +17,7 @@ def _get_sa_info() -> dict:
 
 HEADERS = [
     "Timestamp", "Computer Name", "Operator Username", "Operator Email",
-    "System Model", "System Serial No.", "Processor", "RAM", "Disk Size",
+    "Brand Name", "System Model", "System Serial No.", "Processor", "RAM", "Disk Size",
     "Display / GPU", "Windows Version", "Last Windows Update", "Monitor Details",
 ]
 
@@ -79,8 +79,34 @@ def test_connection() -> tuple[bool, str]:
         return False, str(e)
 
 
+def _find_existing_row(all_values: list, computer_name: str, serial: str) -> int | None:
+    """Return 1-based row index of an existing record for this machine, or None.
+
+    Matches on Computer Name (col B) first, falling back to System Serial No.
+    (col F) so a row started during rename (name only) and a row started
+    during fetch (specs only, before the new name takes effect) get merged
+    into a single line instead of producing two separate rows.
+    """
+    name = (computer_name or "").strip().lower()
+    ser = (serial or "").strip().lower()
+    for idx, row in enumerate(all_values[1:], start=2):
+        row_name = (row[1] if len(row) > 1 else "").strip().lower()
+        row_serial = (row[6] if len(row) > 6 else "").strip().lower()
+        if name and row_name and row_name == name:
+            return idx
+        if ser and row_serial and row_serial == ser:
+            return idx
+    return None
+
+
 def append_row(data: dict) -> tuple[bool, str]:
-    """Append one provisioning row. data keys match _get_details_row() in tab_system."""
+    """Add or update one provisioning row, keyed on computer name / serial no.
+
+    data keys match _get_details_row() in tab_system. If a row already exists
+    for this machine (matched by computer name or serial number), it is
+    updated in place — merging in any newly-supplied fields — instead of
+    appending a duplicate row.
+    """
     try:
         import gspread
         from google.oauth2.service_account import Credentials
@@ -104,15 +130,17 @@ def append_row(data: dict) -> tuple[bool, str]:
             ws = sheet.add_worksheet(title=ws_name, rows=1000, cols=len(HEADERS))
 
         # Ensure header row exists
-        existing = ws.row_values(1)
-        if existing != HEADERS:
+        all_values = ws.get_all_values()
+        if not all_values or all_values[0] != HEADERS:
             ws.insert_row(HEADERS, 1)
+            all_values = [HEADERS] + all_values
 
-        row = [
+        new_row = [
             datetime.now().strftime("%Y-%m-%d %H:%M"),
             data.get("computer_name", ""),
             data.get("operator", ""),
             data.get("email", ""),
+            data.get("brand", ""),
             data.get("model", ""),
             data.get("serial", ""),
             data.get("processor", ""),
@@ -123,7 +151,22 @@ def append_row(data: dict) -> tuple[bool, str]:
             data.get("last_update", ""),
             data.get("monitors", ""),
         ]
-        ws.append_row(row)
+
+        row_idx = _find_existing_row(all_values, new_row[1], new_row[6])
+        if row_idx:
+            existing = all_values[row_idx - 1]
+            merged = [
+                new_row[i] if new_row[i] else (existing[i] if i < len(existing) else "")
+                for i in range(len(new_row))
+            ]
+            # Keep the original "first seen" timestamp instead of overwriting it.
+            if existing and existing[0]:
+                merged[0] = existing[0]
+            last_col = chr(ord('A') + len(HEADERS) - 1)
+            ws.update(f"A{row_idx}:{last_col}{row_idx}", [merged])
+            return True, f"Row {row_idx} updated in '{ws_name}'."
+
+        ws.append_row(new_row)
         return True, f"Row added to '{ws_name}'."
     except Exception as e:
         return False, str(e)
