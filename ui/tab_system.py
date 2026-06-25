@@ -25,6 +25,7 @@ class SystemTab(ctk.CTkFrame):
         super().__init__(master, fg_color="transparent")
         self.role = role
         self.device_type = ctk.StringVar(value="Desktop")
+        self.local_rename_only = ctk.BooleanVar(value=False)
         self._load_config()
         self._build()
 
@@ -101,9 +102,17 @@ class SystemTab(ctk.CTkFrame):
                                                placeholder_text="Required when domain-joined")
         self.rename_pass_entry.grid(row=6, column=1, columnspan=2, padx=8, pady=(4, 8), sticky="w")
 
+        local_only_cb = ctk.CTkCheckBox(
+            rename_frame,
+            text="Local rename only  (skip AD update — use when computer account is missing in domain)",
+            variable=self.local_rename_only,
+            text_color="gray"
+        )
+        local_only_cb.grid(row=7, column=0, columnspan=3, padx=20, pady=(0, 8), sticky="w")
+
         rename_btn = ctk.CTkButton(rename_frame, text="Apply Rename",
                                     command=self._apply_rename)
-        rename_btn.grid(row=7, column=0, columnspan=3, padx=20, pady=(8, 16), sticky="w")
+        rename_btn.grid(row=8, column=0, columnspan=3, padx=20, pady=(4, 16), sticky="w")
 
         # --- Operator & System Details Section ---
         details_frame = ctk.CTkFrame(scroll)
@@ -458,9 +467,14 @@ class SystemTab(ctk.CTkFrame):
 
         domain_user = self.rename_user_entry.get().strip()
         domain_pass = self.rename_pass_entry.get()
+        local_only = self.local_rename_only.get()
 
         def task():
-            if domain_user:
+            if local_only:
+                rc, out = run_powershell("rename_computer.ps1",
+                                          ["-NewName", new_name, "-LocalOnly"],
+                                          callback=self._safe_append)
+            elif domain_user:
                 rc, out = run_powershell_with_secret(
                     "rename_computer.ps1",
                     ["-NewName", new_name, "-DomainUser", domain_user],

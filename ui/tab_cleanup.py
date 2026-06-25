@@ -31,7 +31,7 @@ SECTIONS = [
                     " $skip=@('Microsoft','Packages','Temp','Programs','Google','Mozilla',"
                     "'ConnectedDevicesPlatform','D3DSCache','CrashDumps','npm-cache','pip',"
                     "'Package Cache','NVIDIA','Adobe','BraveSoftware','Vivaldi','Opera Software');"
-                    " $csubs=@('Cache','Code Cache','GPUCache','DawnCache');"
+                    " $csubs=@('Cache','Code Cache','GPUCache','DawnCache','DawnGraphiteCache','DawnWebGPUCache','Service Worker\\ScriptCache');"
                     " foreach ($root in @($env:LOCALAPPDATA,$env:APPDATA)) {"
                     " if (-not (Test-Path $root)) { continue };"
                     " Get-ChildItem $root -Directory -Force -EA SilentlyContinue"
@@ -47,7 +47,7 @@ SECTIONS = [
                     "$skip=@('Microsoft','Packages','Temp','Programs','Google','Mozilla',"
                     "'ConnectedDevicesPlatform','D3DSCache','CrashDumps','npm-cache','pip',"
                     "'Package Cache','NVIDIA','Adobe','BraveSoftware','Vivaldi','Opera Software');"
-                    " $csubs=@('Cache','Code Cache','GPUCache','DawnCache');"
+                    " $csubs=@('Cache','Code Cache','GPUCache','DawnCache','DawnGraphiteCache','DawnWebGPUCache','Service Worker\\ScriptCache');"
                     " foreach ($root in @($env:LOCALAPPDATA,$env:APPDATA)) {"
                     " if (-not (Test-Path $root)) { continue };"
                     " Get-ChildItem $root -Directory -Force -EA SilentlyContinue"
@@ -95,11 +95,12 @@ SECTIONS = [
             },
             {
                 "id": "pkg_cache",
-                "label": "Package Manager Caches  (npm / pip / yarn / NuGet / cargo)",
+                "label": "Package Manager Caches  (npm / npx / pip / yarn / NuGet / cargo)",
                 "default": False,
                 "size_ps": (
                     "$la=$env:LOCALAPPDATA; $up=$env:USERPROFILE; $total=0;"
-                    " foreach ($p in @(\"$la\\npm-cache\\_cacache\",\"$la\\pip\\cache\","
+                    " foreach ($p in @(\"$la\\npm-cache\\_cacache\",\"$la\\npm-cache\\_npx\","
+                    "\"$la\\pip\\cache\","
                     "\"$up\\.nuget\\packages\\.cache\",\"$la\\Yarn\\Cache\","
                     "\"$up\\.cargo\\registry\\cache\",\"$up\\.gradle\\caches\")) {"
                     " if (Test-Path $p) {"
@@ -109,7 +110,8 @@ SECTIONS = [
                 ),
                 "clean_ps": (
                     "$la=$env:LOCALAPPDATA; $up=$env:USERPROFILE;"
-                    " foreach ($p in @(\"$la\\npm-cache\\_cacache\",\"$la\\pip\\cache\","
+                    " foreach ($p in @(\"$la\\npm-cache\\_cacache\",\"$la\\npm-cache\\_npx\","
+                    "\"$la\\pip\\cache\","
                     "\"$up\\.nuget\\packages\\.cache\",\"$la\\Yarn\\Cache\","
                     "\"$up\\.cargo\\registry\\cache\",\"$up\\.gradle\\caches\")) {"
                     " if (Test-Path $p) { Remove-Item \"$p\\*\" -Recurse -Force -EA SilentlyContinue } };"
@@ -236,6 +238,80 @@ SECTIONS = [
                     " $p=Join-Path $_.FullName $s;"
                     " if (Test-Path $p) { Remove-Item \"$p\\*\" -Recurse -Force -EA SilentlyContinue } } } };"
                     " Write-Host 'Brave cache cleaned.'"
+                ),
+            },
+            {
+                "id": "vivaldi_cache",
+                "label": "Vivaldi Cache",
+                "default": False,
+                "size_ps": (
+                    "$b=\"$env:LOCALAPPDATA\\Vivaldi\\User Data\"; $total=0;"
+                    " if (Test-Path $b) {"
+                    " $subs=@('Cache','Code Cache','GPUCache','Service Worker\\CacheStorage');"
+                    " Get-ChildItem $b -Directory -Force -EA SilentlyContinue"
+                    " | Where-Object { $_.Name -match '^(Default|Profile \\d+|Guest Profile)$' }"
+                    " | ForEach-Object {"
+                    " foreach ($s in $subs) {"
+                    " $p=Join-Path $_.FullName $s;"
+                    " if (Test-Path $p) {"
+                    " $sz=(Get-ChildItem $p -Recurse -Force -EA SilentlyContinue | Measure-Object Length -Sum).Sum;"
+                    " if ($sz) { $total+=$sz } } } } };"
+                    " [int64]$total"
+                ),
+                "clean_ps": (
+                    "$b=\"$env:LOCALAPPDATA\\Vivaldi\\User Data\";"
+                    " if (Test-Path $b) {"
+                    " $subs=@('Cache','Code Cache','GPUCache','Service Worker\\CacheStorage');"
+                    " Get-ChildItem $b -Directory -Force -EA SilentlyContinue"
+                    " | Where-Object { $_.Name -match '^(Default|Profile \\d+|Guest Profile)$' }"
+                    " | ForEach-Object {"
+                    " foreach ($s in $subs) {"
+                    " $p=Join-Path $_.FullName $s;"
+                    " if (Test-Path $p) { Remove-Item \"$p\\*\" -Recurse -Force -EA SilentlyContinue } } } };"
+                    " Write-Host 'Vivaldi cache cleaned.'"
+                ),
+            },
+            {
+                "id": "opera_cache",
+                "label": "Opera Cache",
+                "default": False,
+                "size_ps": (
+                    "$b=\"$env:APPDATA\\Opera Software\\Opera Stable\"; $total=0;"
+                    " if (Test-Path $b) {"
+                    " $subs=@('Cache','Code Cache','GPUCache','Service Worker\\CacheStorage');"
+                    " foreach ($s in $subs) {"
+                    " $p=Join-Path $b $s;"
+                    " if (Test-Path $p) {"
+                    " $sz=(Get-ChildItem $p -Recurse -Force -EA SilentlyContinue | Measure-Object Length -Sum).Sum;"
+                    " if ($sz) { $total+=$sz } } } };"
+                    " [int64]$total"
+                ),
+                "clean_ps": (
+                    "$b=\"$env:APPDATA\\Opera Software\\Opera Stable\";"
+                    " if (Test-Path $b) {"
+                    " $subs=@('Cache','Code Cache','GPUCache','Service Worker\\CacheStorage');"
+                    " foreach ($s in $subs) {"
+                    " $p=Join-Path $b $s;"
+                    " if (Test-Path $p) { Remove-Item \"$p\\*\" -Recurse -Force -EA SilentlyContinue } } };"
+                    " Write-Host 'Opera cache cleaned.'"
+                ),
+            },
+            {
+                "id": "outlook_logs",
+                "label": "Outlook Logging & Diagnostics  (%TEMP%\\Outlook Logging)",
+                "default": False,
+                "size_ps": (
+                    "$total=0;"
+                    " foreach ($p in @(\"$env:TEMP\\Outlook Logging\",\"$env:TEMP\\Diagnostics\")) {"
+                    " if (Test-Path $p) {"
+                    " $sz=(Get-ChildItem $p -Recurse -Force -EA SilentlyContinue | Measure-Object Length -Sum).Sum;"
+                    " if ($sz) { $total+=$sz } } };"
+                    " [int64]$total"
+                ),
+                "clean_ps": (
+                    "foreach ($p in @(\"$env:TEMP\\Outlook Logging\",\"$env:TEMP\\Diagnostics\")) {"
+                    " if (Test-Path $p) { Remove-Item \"$p\\*\" -Recurse -Force -EA SilentlyContinue } };"
+                    " Write-Host 'Outlook logging and diagnostics cleaned.'"
                 ),
             },
             {
@@ -379,6 +455,62 @@ def _fmt_size(n):
     return f"{n} B"
 
 
+_PROFILE_LIST_PS = (
+    "$loggedIn=@{};"
+    " try { Get-WmiObject Win32_LoggedOnUser -EA SilentlyContinue | ForEach-Object {"
+    "   if ($_.Antecedent -match 'Name=\"([^\"]+)\"') {"
+    "     $loggedIn[$Matches[1].ToLower()]=1 } } } catch {};"
+    " Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\*'"
+    " -EA SilentlyContinue"
+    " | Where-Object { $_.ProfileImagePath -match 'C:\\\\Users\\\\'"
+    "   -and $_.ProfileImagePath -notmatch 'systemprofile|LocalService|NetworkService|Default' }"
+    " | ForEach-Object {"
+    "   $path=$_.ProfileImagePath; $name=Split-Path $path -Leaf;"
+    "   $last=if(Test-Path $path){"
+    "     (Get-Item $path -Force -EA SilentlyContinue).LastWriteTime.ToString('yyyy-MM-dd HH:mm')"
+    "   }else{'N/A'};"
+    "   $active=if($loggedIn.ContainsKey($name.ToLower())){'1'}else{'0'};"
+    "   Write-Output \"$name|$path|$last|$active\" }"
+)
+
+
+def _profile_size_ps(profile_path):
+    p = profile_path.replace("'", "''")
+    return (
+        f"$root='{p}';"
+        " $total=0;"
+        " $targets=@('AppData\\Local\\Temp',"
+        " 'AppData\\Local\\Microsoft\\Windows\\INetCache',"
+        " 'AppData\\Local\\CrashDumps',"
+        " 'AppData\\Roaming\\Microsoft\\Windows\\Recent');"
+        " foreach($t in $targets){"
+        "   $p=Join-Path $root $t;"
+        "   if(Test-Path $p){"
+        "     $sz=(Get-ChildItem $p -Recurse -Force -EA SilentlyContinue | Measure-Object Length -Sum).Sum;"
+        "     if($sz){$total+=$sz}"
+        "   }"
+        " };"
+        " [int64]$total"
+    )
+
+
+def _profile_clean_ps(profile_path, name):
+    p = profile_path.replace("'", "''")
+    n = name.replace("'", "''")
+    return (
+        f"$root='{p}';"
+        " $targets=@('AppData\\Local\\Temp',"
+        " 'AppData\\Local\\Microsoft\\Windows\\INetCache',"
+        " 'AppData\\Local\\CrashDumps',"
+        " 'AppData\\Roaming\\Microsoft\\Windows\\Recent');"
+        " foreach($t in $targets){"
+        "   $p=Join-Path $root $t;"
+        "   if(Test-Path $p){Remove-Item \"$p\\*\" -Recurse -Force -EA SilentlyContinue}"
+        " };"
+        f" Write-Host 'AppData cleaned for {n}.'"
+    )
+
+
 class CleanupTab(ctk.CTkFrame):
     def __init__(self, master, role):
         super().__init__(master, fg_color="transparent")
@@ -387,6 +519,11 @@ class CleanupTab(ctk.CTkFrame):
         self._vars = {}
         self._size_labels = {}
         self._sizes = {loc["id"]: None for loc in _all_locations()}
+        self._profile_data = []
+        self._profile_sizes = {}
+        self._profile_vars = {}
+        self._profile_size_labels = {}
+        self._profile_list_frame = None
         self._build()
 
     def _build(self):
@@ -427,10 +564,13 @@ class CleanupTab(ctk.CTkFrame):
                                          font=ctk.CTkFont(size=12), text_color="gray")
         self._total_label.grid(row=2, column=0, padx=14, pady=(0, 12), sticky="w")
 
+        # ── Profile AppData card ───────────────────────────────────
+        self._build_profile_card(wrap, row=1)
+
         # ── Section cards ──────────────────────────────────────────
         for sec_idx, sec in enumerate(SECTIONS):
             sec_card = ctk.CTkFrame(wrap)
-            sec_card.grid(row=sec_idx + 1, column=0, padx=10, pady=4, sticky="ew")
+            sec_card.grid(row=sec_idx + 2, column=0, padx=10, pady=4, sticky="ew")
             sec_card.grid_columnconfigure(1, weight=1)
 
             ctk.CTkLabel(sec_card, text=sec["title"],
@@ -453,7 +593,7 @@ class CleanupTab(ctk.CTkFrame):
                 self._size_labels[loc["id"]] = size_lbl
 
         # ── Output ─────────────────────────────────────────────────
-        out_row = len(SECTIONS) + 1
+        out_row = len(SECTIONS) + 2
         ctk.CTkLabel(wrap, text="Output",
                      font=ctk.CTkFont(size=13, weight="bold"), anchor="w").grid(
             row=out_row, column=0, padx=10, pady=(8, 2), sticky="w")
@@ -577,6 +717,188 @@ class CleanupTab(ctk.CTkFrame):
             freed = max(0, total_before - total_after)
             self.after(0, self._update_total)
             self._safe_append(f"\nDone.  Freed: {_fmt_size(freed)}")
+            self._running = False
+            self.after(0, self._set_btn_state, True)
+
+        threading.Thread(target=task, daemon=True).start()
+
+    # ── Profile AppData card ───────────────────────────────────────
+
+    def _build_profile_card(self, wrap, row):
+        import tkinter.messagebox as _msgbox
+        self._msgbox = _msgbox
+
+        card = ctk.CTkFrame(wrap)
+        card.grid(row=row, column=0, padx=10, pady=4, sticky="ew")
+        card.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(card, text="Other-Profile AppData Cleaner  (admin)",
+                     font=ctk.CTkFont(size=12, weight="bold"),
+                     text_color=("gray30", "gray70")).grid(
+            row=0, column=0, padx=14, pady=(10, 4), sticky="w")
+
+        btn_row = ctk.CTkFrame(card, fg_color="transparent")
+        btn_row.grid(row=1, column=0, padx=10, pady=(0, 4), sticky="w")
+
+        ctk.CTkButton(btn_row, text="Refresh Profiles", width=130,
+                      command=self._refresh_profiles).grid(row=0, column=0, padx=(4, 6))
+        self._prof_scan_btn = ctk.CTkButton(btn_row, text="Scan Sizes", width=100,
+                                             command=self._scan_profiles)
+        self._prof_scan_btn.grid(row=0, column=1, padx=6)
+        self._prof_clean_btn = ctk.CTkButton(btn_row, text="Clean Selected", width=120,
+                                              fg_color="#c0392b", hover_color="#922b21",
+                                              command=self._clean_profiles)
+        self._prof_clean_btn.grid(row=0, column=2, padx=6)
+
+        self._profile_list_frame = ctk.CTkFrame(card, fg_color="transparent")
+        self._profile_list_frame.grid(row=2, column=0, padx=10, pady=(4, 10), sticky="ew")
+        self._profile_list_frame.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(self._profile_list_frame, text='Click "Refresh Profiles" to load.',
+                     text_color="gray", font=ctk.CTkFont(size=11)).grid(
+            row=0, column=0, columnspan=4, padx=4, pady=4, sticky="w")
+
+    def _refresh_profiles(self):
+        if self._running:
+            return
+        self._running = True
+        self._append("\nLoading user profiles...")
+
+        def task():
+            rc, out = run_inline_powershell(_PROFILE_LIST_PS)
+            profiles = []
+            for line in out.splitlines():
+                line = line.strip()
+                if '|' not in line:
+                    continue
+                parts = line.split('|', 3)
+                if len(parts) == 4:
+                    profiles.append({
+                        'name': parts[0],
+                        'path': parts[1],
+                        'last_login': parts[2],
+                        'active': parts[3] == '1',
+                    })
+            self._profile_data = profiles
+            self._profile_sizes = {p['name']: None for p in profiles}
+            self.after(0, self._rebuild_profile_rows)
+            self._safe_append(f"Found {len(profiles)} profile(s).")
+            self._running = False
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _rebuild_profile_rows(self):
+        if self._profile_list_frame is None:
+            return
+        for w in self._profile_list_frame.winfo_children():
+            w.destroy()
+        self._profile_vars = {}
+        self._profile_size_labels = {}
+
+        if not self._profile_data:
+            ctk.CTkLabel(self._profile_list_frame, text="No user profiles found.",
+                         text_color="gray").grid(row=0, column=0, padx=4, pady=4, sticky="w")
+            return
+
+        self._profile_list_frame.grid_columnconfigure(0, weight=0)
+        self._profile_list_frame.grid_columnconfigure(1, weight=0)
+        self._profile_list_frame.grid_columnconfigure(2, weight=1)
+        self._profile_list_frame.grid_columnconfigure(3, weight=0)
+
+        for i, prof in enumerate(self._profile_data):
+            var = ctk.BooleanVar(value=False)
+            self._profile_vars[prof['name']] = var
+
+            label_text = f"{prof['name']}    Last: {prof['last_login']}"
+            cb = ctk.CTkCheckBox(self._profile_list_frame, text=label_text, variable=var,
+                                 font=ctk.CTkFont(size=12))
+            cb.grid(row=i, column=0, padx=(4, 8), pady=3, sticky="w")
+
+            if prof['active']:
+                ctk.CTkLabel(self._profile_list_frame, text="ACTIVE",
+                             text_color="#e74c3c",
+                             font=ctk.CTkFont(size=11, weight="bold")).grid(
+                    row=i, column=1, padx=(0, 12), pady=3, sticky="w")
+
+            size_lbl = ctk.CTkLabel(self._profile_list_frame, text="---",
+                                    text_color="gray", font=ctk.CTkFont(size=11))
+            size_lbl.grid(row=i, column=3, padx=(0, 14), pady=3, sticky="e")
+            self._profile_size_labels[prof['name']] = size_lbl
+
+    def _scan_profiles(self):
+        if self._running or not self._profile_data:
+            return
+        self._running = True
+        self._append("\nScanning profile AppData sizes...")
+
+        def task():
+            for prof in self._profile_data:
+                rc, out = run_inline_powershell(_profile_size_ps(prof['path']))
+                try:
+                    val = int([l for l in out.splitlines() if l.strip()][-1])
+                except (ValueError, IndexError):
+                    val = 0
+                self._profile_sizes[prof['name']] = val
+                lbl = self._profile_size_labels.get(prof['name'])
+                if lbl:
+                    color = ("#1a1a1a", "white") if val > 0 else "gray"
+                    self.after(0, lbl.configure, {"text": _fmt_size(val), "text_color": color})
+            self._safe_append("Profile scan complete.")
+            self._running = False
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _clean_profiles(self):
+        if self._running:
+            return
+        selected = [p for p in self._profile_data
+                    if self._profile_vars.get(p['name'], ctk.BooleanVar()).get()]
+        if not selected:
+            self._append("No profiles selected.")
+            return
+
+        active_sel = [p for p in selected if p['active']]
+        if active_sel:
+            names = ', '.join(p['name'] for p in active_sel)
+            proceed = self._msgbox.askyesno(
+                "Active Profile Warning",
+                f"Profile(s) currently active:\n  {names}\n\n"
+                "Cleaning an active profile's AppData may cause app instability.\n\n"
+                "Proceed anyway?"
+            )
+            if not proceed:
+                return
+
+        self._running = True
+        self._set_btn_state(False)
+        self._append(f"\nCleaning AppData for {len(selected)} profile(s)...")
+        log(f"Cleanup: profile AppData clean {[p['name'] for p in selected]}")
+
+        def task():
+            for prof in selected:
+                self._safe_append(f"\n  >>> {prof['name']}  ({prof['path']})")
+                rc, out = run_inline_powershell(
+                    _profile_clean_ps(prof['path'], prof['name']),
+                    callback=self._safe_append
+                )
+                if rc != 0:
+                    self._safe_append(f"  [WARN] exit {rc}")
+                log(f"Cleanup: profile {prof['name']} rc={rc}")
+
+            self._safe_append("\nRescanning...")
+            for prof in selected:
+                rc, out = run_inline_powershell(_profile_size_ps(prof['path']))
+                try:
+                    val = int([l for l in out.splitlines() if l.strip()][-1])
+                except (ValueError, IndexError):
+                    val = 0
+                self._profile_sizes[prof['name']] = val
+                lbl = self._profile_size_labels.get(prof['name'])
+                if lbl:
+                    color = ("#1a1a1a", "white") if val > 0 else "gray"
+                    self.after(0, lbl.configure, {"text": _fmt_size(val), "text_color": color})
+
+            self._safe_append("\nProfile cleanup done.")
             self._running = False
             self.after(0, self._set_btn_state, True)
 
