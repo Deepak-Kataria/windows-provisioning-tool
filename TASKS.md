@@ -1,20 +1,11 @@
 # IT Provisioning Tool — Task Tracker
 
-Last updated: 2026-05-28
+Last updated: 2026-06-26
 
 ---
 
 ## Pending
 
-### #3 — Fix Cam 350 InstallShield silent install failure
-**Status:** Pending  
-**Details:**  
-- Exit code `0x80041F00` (InstallShield HRESULT error)  
-- Try manual `installer_args: ["/s"]` in `config/apps_local.json`  
-- Check if software is already installed on the machine  
-- Path uses forward slashes (`//server/...`) — normalisation fix applied, needs real-world test  
-
----
 
 
 ### #9 — Cleanup Hub (3 sections: User Profiles, Windows Cleanup, Disk Analysis)
@@ -136,10 +127,8 @@ Last updated: 2026-05-28
 ## Completed (this session continued)
 
 ### #6 — Update project memory with session context ✓
-**Completed:** 2026-05-28
-**Result:** Updated `project_context.md` — confirmed v1.3.0, all tabs/modules/config documented, pending tasks synced.
-
----
+**Completed:** 2026-06-24
+**Result:** Updated `project_overview.md` and `project_sheets_sync.md` memory files. Captured: Brand Name column, upsert Serial col index fix, runner CREATE_NO_WINDOW, rename domain-detection fix (RENAME_CONTEXT output), Cleanup tab SECTIONS refactor, run_dev.bat testing note.
 
 ### #7 — Vulnerability scan tab ✓
 **Completed:** 2026-05-11  

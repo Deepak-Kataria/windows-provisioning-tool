@@ -1,5 +1,13 @@
 $ErrorActionPreference = "Stop"
 $ScriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+trap {
+    Write-Host ""
+    Write-Host "ERROR: $_" -ForegroundColor Red
+    Write-Host ""
+    Read-Host "Press Enter to exit"
+    exit 1
+}
 $LocalBuild = Join-Path $env:TEMP "IT-Provisioning-Tool-build"
 $BuildEnv   = Join-Path $LocalBuild "_build_env"
 $PythonExe  = $null
@@ -83,22 +91,18 @@ $LocalDist = Join-Path $LocalBuild "dist"
 $LocalWork = Join-Path $LocalBuild "work"
 
 Write-Host ""
-Write-Host "Locating bcrypt and cffi packages..."
-$BcryptDir   = (& $PythonExe -c "import os,bcrypt; print(os.path.dirname(bcrypt.__file__))").Trim()
-$CffiBackend = (& $PythonExe -c "import os,_cffi_backend; print(os.path.abspath(_cffi_backend.__file__))").Trim()
-Write-Host "  bcrypt      : $BcryptDir"
-Write-Host "  _cffi_backend: $CffiBackend"
+Write-Host "Locating bcrypt package..."
+$BcryptDir = (& $PythonExe -c "import os,bcrypt; print(os.path.dirname(bcrypt.__file__))").Trim()
+Write-Host "  bcrypt: $BcryptDir"
 
 Write-Host ""
 Write-Host "Running PyInstaller (building locally)..."
 & $PythonExe -m PyInstaller --noconfirm --onefile --windowed --uac-admin `
     --name "IT-Provisioning-Tool" `
     --collect-data customtkinter `
-    --hidden-import bcrypt `
-    --hidden-import _cffi_backend `
-    "--add-binary=${BcryptDir}\_bcrypt.pyd;bcrypt" `
-    "--add-data=${BcryptDir}\__init__.py;bcrypt" `
-    "--add-binary=${CffiBackend};." `
+    --collect-all bcrypt `
+    --collect-all gspread `
+    --collect-all google `
     "--add-data=$LocalSrc\config;config" `
     "--add-data=$LocalSrc\scripts;scripts" `
     "--add-data=$LocalSrc\CHANGELOG.md;." `
@@ -131,3 +135,5 @@ Remove-Item $LocalBuild -Recurse -Force
 Write-Host ""
 Write-Host "Build complete: dist\IT-Provisioning-Tool.exe"
 Write-Host "Copy IT-Provisioning-Tool.exe to any machine and run. No Python needed."
+Write-Host ""
+Read-Host "Press Enter to exit"

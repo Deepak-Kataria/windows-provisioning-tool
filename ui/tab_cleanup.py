@@ -676,7 +676,8 @@ GROUPS = [
 ]
 
 
-LOCATIONS = [item for grp in GROUPS for item in grp["items"]]
+def _all_locations():
+    return [item for grp in GROUPS for item in grp["items"]]
 
 
 def _fmt_size(n):
