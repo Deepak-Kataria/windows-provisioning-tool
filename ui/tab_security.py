@@ -273,7 +273,7 @@ class SecurityTab(ctk.CTkFrame):
         top = ctk.CTkFrame(self, height=56, corner_radius=0,
                            fg_color=("gray90", "gray17"))
         top.grid(row=0, column=0, sticky="ew")
-        top.grid_columnconfigure(2, weight=1)
+        top.grid_columnconfigure(4, weight=1)
         top.grid_propagate(False)
 
         self._scan_btn = ctk.CTkButton(
@@ -288,10 +288,16 @@ class SecurityTab(ctk.CTkFrame):
             state="disabled", command=self._export_report)
         self._export_btn.grid(row=0, column=1, padx=6, pady=10)
 
+        self._copy_btn = ctk.CTkButton(
+            top, text="Copy Report", width=110,
+            fg_color="transparent", border_width=1,
+            state="disabled", command=self._copy_report)
+        self._copy_btn.grid(row=0, column=2, padx=6, pady=10)
+
         self._status_lbl = ctk.CTkLabel(
             top, text="Click 'Run Vulnerability Scan' to start.",
             text_color="gray", font=ctk.CTkFont(size=11))
-        self._status_lbl.grid(row=0, column=2, padx=12, sticky="w")
+        self._status_lbl.grid(row=0, column=4, padx=12, sticky="w")
 
         self._scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self._scroll.grid(row=1, column=0, sticky="nsew")
@@ -370,6 +376,7 @@ class SecurityTab(ctk.CTkFrame):
                 self._add_result_row(grp_frame, check, status, detail, r_idx)
 
         self._export_btn.configure(state="normal")
+        self._copy_btn.configure(state="normal")
 
     def _add_result_row(self, parent, check, status, detail, row_idx):
         color = _STATUS_COLOR.get(status, "gray")
@@ -487,6 +494,7 @@ class SecurityTab(ctk.CTkFrame):
         self._fixed.clear()
         self._scan_btn.configure(state="disabled", text="Scanning...")
         self._export_btn.configure(state="disabled")
+        self._copy_btn.configure(state="disabled")
         self._status_lbl.configure(text="Running checks...", text_color="gray")
         self._clear_report()
 
@@ -575,6 +583,34 @@ class SecurityTab(ctk.CTkFrame):
             self._running = False
 
         threading.Thread(target=task, daemon=True).start()
+
+    # ── Copy ───────────────────────────────────────────────────────
+
+    def _copy_report(self):
+        if not self._results:
+            return
+        lines = [
+            "Security Scan Report",
+            f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            "=" * 50, "",
+        ]
+        for sev, label in [("HIGH", "HIGH RISK"), ("MEDIUM", "MEDIUM RISK"), ("LOW", "LOW RISK")]:
+            lines.append(f"\n[ {label} ]")
+            for check in [c for c in CHECKS if c["severity"] == sev]:
+                r = self._results.get(check["id"])
+                status, detail = r if r else ("----", "")
+                icon = _STATUS_ICON.get(status, "-")
+                line = f"  {icon} {check['name']}"
+                if detail:
+                    line += f" — {detail}"
+                lines.append(line)
+        passed = sum(1 for s, _ in self._results.values() if s == "PASS")
+        failed = sum(1 for s, _ in self._results.values() if s == "FAIL")
+        warned = sum(1 for s, _ in self._results.values() if s == "WARN")
+        lines += ["", "=" * 50, f"Summary: {passed} PASS  {failed} FAIL  {warned} WARN"]
+        self.clipboard_clear()
+        self.clipboard_append("\n".join(lines))
+        self._status_lbl.configure(text="Report copied to clipboard.", text_color="gray")
 
     # ── Export ─────────────────────────────────────────────────────
 

@@ -174,7 +174,7 @@ class DebloatTab(ctk.CTkFrame):
     def _show_done_dialog(self, title, summary):
         dialog = ctk.CTkToplevel(self)
         dialog.title(title)
-        dialog.geometry("360x200")
+        dialog.geometry("360x230")
         dialog.resizable(False, False)
         dialog.grab_set()
         dialog.lift()
@@ -182,8 +182,12 @@ class DebloatTab(ctk.CTkFrame):
         ctk.CTkLabel(dialog, text=title,
                       font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(24, 8))
         ctk.CTkLabel(dialog, text=summary, font=ctk.CTkFont(size=13),
-                      justify="left").pack(pady=(0, 16))
-        ctk.CTkButton(dialog, text="OK", width=100, command=dialog.destroy).pack()
+                      justify="left").pack(pady=(0, 12))
+        btn_row = ctk.CTkFrame(dialog, fg_color="transparent")
+        btn_row.pack(pady=(0, 16))
+        ctk.CTkButton(btn_row, text="OK", width=100, command=dialog.destroy).grid(row=0, column=0, padx=6)
+        ctk.CTkButton(btn_row, text="Copy", width=80, fg_color="transparent", border_width=1,
+                      command=lambda: (dialog.clipboard_clear(), dialog.clipboard_append(f"{title}\n\n{summary}"))).grid(row=0, column=1, padx=6)
 
     # ── Remove ─────────────────────────────────────────────────────
 

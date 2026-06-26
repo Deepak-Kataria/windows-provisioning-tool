@@ -382,5 +382,18 @@ class TweaksTab(ctk.CTkFrame):
         log_box.insert("1.0", log_text.strip() if log_text.strip() else "No output captured.")
         log_box.configure(state="disabled")
 
-        ctk.CTkButton(dialog, text="Close", width=100,
-                       command=dialog.destroy).grid(row=4, column=0, pady=(0, 16))
+        close_row = ctk.CTkFrame(dialog, fg_color="transparent")
+        close_row.grid(row=4, column=0, pady=(0, 16))
+
+        def _copy_results():
+            lines = [f"Tweaks {action.capitalize()} — {succeeded} ok, {failed} failed, {skipped} skipped"]
+            for name, ok, err, _ in results:
+                icon = "OK" if ok is True else ("FAIL" if ok is False else "SKIP")
+                lines.append(f"  [{icon}] {name}" + (f" — {err}" if err else ""))
+            dialog.clipboard_clear()
+            dialog.clipboard_append("\n".join(lines))
+
+        ctk.CTkButton(close_row, text="Close", width=100,
+                      command=dialog.destroy).grid(row=0, column=0, padx=6)
+        ctk.CTkButton(close_row, text="Copy Results", width=110, fg_color="transparent", border_width=1,
+                      command=_copy_results).grid(row=0, column=1, padx=6)
