@@ -1,12 +1,32 @@
+import re
 import customtkinter as ctk
 import json
 import os
 import threading
-from modules.runner import run_winget, run_winget_uninstall, run_local_installer
+import tkinter.messagebox as msgbox
+from modules.runner import run_winget, run_winget_uninstall, run_local_installer, run_inline_powershell
 from modules.utils import resolve_installer_path
 from modules.logger import log
 
 CONFIG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config")
+
+_ANSI_RE = re.compile(r'\x1b\[[0-9;]*[mGKHF]|\r')
+
+
+def _parse_winget_list(output: str) -> list:
+    lines = [_ANSI_RE.sub("", l) for l in output.splitlines()]
+    sep_idx = next((i for i, l in enumerate(lines) if re.match(r'^-{10,}', l.strip())), -1)
+    if sep_idx < 0:
+        return []
+    apps = []
+    for line in lines[sep_idx + 1:]:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        parts = re.split(r'  +', stripped)
+        if len(parts) >= 2 and parts[1].strip():
+            apps.append({"name": parts[0].strip(), "id": parts[1].strip()})
+    return apps
 
 
 class AppsTab(ctk.CTkFrame):
@@ -20,6 +40,8 @@ class AppsTab(ctk.CTkFrame):
         self._running = False
         self._stop_requested = False
         self._current_process = None
+        self._audit_results = {"approved": [], "unknown": []}
+        self._audit_checkboxes = {}
         self._load_config()
         self._build()
 
@@ -234,6 +256,68 @@ class AppsTab(ctk.CTkFrame):
         self.uninstall_status = ctk.CTkLabel(uninstall_prog, text="", font=ctk.CTkFont(size=11), anchor="w")
         self.uninstall_status.grid(row=1, column=0, sticky="w", pady=(2, 0))
 
+        # ── Software Audit card ────────────────────────────────────
+        audit_card = ctk.CTkFrame(w)
+        audit_card.grid(row=5, column=0, columnspan=2, padx=10, pady=(0, 10), sticky="ew")
+        audit_card.grid_columnconfigure(0, weight=1)
+
+        audit_hdr = ctk.CTkFrame(audit_card, fg_color="transparent")
+        audit_hdr.grid(row=0, column=0, sticky="ew", padx=16, pady=(14, 2))
+        audit_hdr.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(audit_hdr, text="Software Audit  /  Reinstall Backup",
+                     font=ctk.CTkFont(size=14, weight="bold")).grid(row=0, column=0, sticky="w")
+        self._audit_btn = ctk.CTkButton(audit_hdr, text="Scan Installed Apps", width=155,
+                                         command=self._run_audit)
+        self._audit_btn.grid(row=0, column=1, sticky="e")
+
+        ctk.CTkLabel(audit_card,
+                     text="Scan → check apps → Save .ps1 or Copy to clipboard → paste on fresh system to reinstall.",
+                     text_color="gray", font=ctk.CTkFont(size=11)).grid(
+            row=1, column=0, sticky="w", padx=16, pady=(0, 4))
+
+        self._audit_status = ctk.CTkLabel(audit_card, text="", font=ctk.CTkFont(size=11))
+        self._audit_status.grid(row=2, column=0, padx=16, pady=(0, 4), sticky="w")
+
+        self._audit_scroll = ctk.CTkScrollableFrame(audit_card, height=260)
+        self._audit_scroll.grid(row=3, column=0, padx=16, pady=(0, 6), sticky="ew")
+        self._audit_scroll.grid_columnconfigure(1, weight=1)
+
+        audit_action_row = ctk.CTkFrame(audit_card, fg_color="transparent")
+        audit_action_row.grid(row=4, column=0, padx=16, pady=(0, 14), sticky="w")
+
+        ctk.CTkButton(audit_action_row, text="Select All", width=90,
+                       command=lambda: [v.set(True) for v, _ in self._audit_checkboxes.values()]).grid(
+            row=0, column=0, padx=(0, 4))
+        ctk.CTkButton(audit_action_row, text="Deselect All", width=90,
+                       command=lambda: [v.set(False) for v, _ in self._audit_checkboxes.values()]).grid(
+            row=0, column=1, padx=4)
+
+        ctk.CTkFrame(audit_action_row, fg_color="gray40", width=1, height=24).grid(
+            row=0, column=2, padx=10)
+
+        self._audit_copy_btn = ctk.CTkButton(audit_action_row, text="Copy Script", width=110,
+                                              fg_color="#2e7d32", hover_color="#1b5e20",
+                                              command=self._audit_copy_clipboard, state="disabled")
+        self._audit_copy_btn.grid(row=0, column=3, padx=4)
+
+        self._audit_save_btn = ctk.CTkButton(audit_action_row, text="Save .ps1", width=100,
+                                              fg_color="#1565C0", hover_color="#0d3c6e",
+                                              command=self._audit_save_script, state="disabled")
+        self._audit_save_btn.grid(row=0, column=4, padx=4)
+
+        self._audit_export_btn = ctk.CTkButton(audit_action_row, text="Export CSV", width=100,
+                                                fg_color="#555", hover_color="#444",
+                                                command=self._audit_export_csv, state="disabled")
+        self._audit_export_btn.grid(row=0, column=5, padx=4)
+
+        ctk.CTkFrame(audit_action_row, fg_color="gray40", width=1, height=24).grid(
+            row=0, column=6, padx=10)
+
+        self._audit_install_btn = ctk.CTkButton(audit_action_row, text="Install Selected Now", width=150,
+                                                  fg_color="#E65100", hover_color="#BF360C",
+                                                  command=self._audit_install_unknown, state="disabled")
+        self._audit_install_btn.grid(row=0, column=7, padx=4)
+
     # ── Helpers ────────────────────────────────────────────────────
 
     def _populate_team_apps(self, team_name):
@@ -261,7 +345,8 @@ class AppsTab(ctk.CTkFrame):
         self.after(0, self._append_output, text)
 
     def _set_all_buttons(self, state):
-        for btn in (self.common_btn, self.team_btn, self.local_btn, self.uninstall_btn):
+        for btn in (self.common_btn, self.team_btn, self.local_btn,
+                    self.uninstall_btn, self._audit_btn):
             btn.configure(state=state)
         self.stop_btn.configure(state="normal" if state == "disabled" else "disabled")
 
@@ -620,5 +705,171 @@ class AppsTab(ctk.CTkFrame):
                 self._show_done_dialog(succeeded, failed, total, "uninstalled")
 
             self.after(0, finish)
+
+        threading.Thread(target=task, daemon=True).start()
+
+    # ── Software Audit ─────────────────────────────────────────────
+
+    def _audit_script_lines(self) -> list:
+        import datetime
+        checked = [app for wid, (var, app) in self._audit_checkboxes.items() if var.get()]
+        lines = [
+            "# Software Reinstall Script",
+            f"# Generated by IT Provisioning Tool  —  {datetime.date.today()}",
+            f"# {len(checked)} app(s) selected",
+            "",
+        ]
+        for a in sorted(checked, key=lambda x: x["name"].lower()):
+            lines.append(
+                f'winget install --id "{a["id"]}" '
+                f"--accept-package-agreements --accept-source-agreements --silent"
+            )
+        return lines
+
+    def _audit_copy_clipboard(self):
+        script = "\n".join(self._audit_script_lines())
+        self.clipboard_clear()
+        self.clipboard_append(script)
+        self._audit_copy_btn.configure(text="Copied!")
+        self.after(2000, lambda: self._audit_copy_btn.configure(text="Copy Script"))
+        self._append_output("Reinstall script copied to clipboard.")
+
+    def _audit_save_script(self):
+        import tkinter.filedialog as filedialog
+        path = filedialog.asksaveasfilename(
+            defaultextension=".ps1",
+            filetypes=[("PowerShell scripts", "*.ps1"), ("All files", "*.*")],
+            initialfile="reinstall_apps.ps1",
+            title="Save Reinstall Script",
+        )
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("\n".join(self._audit_script_lines()))
+            log(f"Reinstall script saved to {path}", "success")
+            self._append_output(f"Script saved to {path}")
+        except Exception as e:
+            msgbox.showerror("Save Failed", str(e))
+
+    def _audit_export_csv(self):
+        import csv
+        import tkinter.filedialog as filedialog
+        path = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+            initialfile="software_audit.csv",
+            title="Export Software Audit to CSV",
+        )
+        if not path:
+            return
+        try:
+            with open(path, "w", newline="", encoding="utf-8-sig") as f:
+                writer = csv.writer(f)
+                writer.writerow(["App Name", "Winget ID", "Status"])
+                for a in sorted(self._audit_results.get("unknown", []), key=lambda x: x["name"].lower()):
+                    writer.writerow([a["name"], a["id"], "Unknown"])
+                for a in sorted(self._audit_results.get("approved", []), key=lambda x: x["name"].lower()):
+                    writer.writerow([a["name"], a["id"], "Approved"])
+            log(f"Audit exported to {path}", "success")
+            self._append_output(f"Audit exported to {path}")
+        except Exception as e:
+            msgbox.showerror("Export Failed", str(e))
+
+    def _audit_install_unknown(self):
+        checked = [app for wid, (var, app) in self._audit_checkboxes.items() if var.get()]
+        if not checked or self._running:
+            return
+        apps = [{"name": a["name"], "winget_id": a["id"]} for a in checked]
+        self._audit_install_btn.configure(state="disabled")
+        self._run_installs(apps, self.common_bar, self.common_status)
+
+    def _run_audit(self):
+        self._audit_btn.configure(state="disabled", text="Scanning...")
+        self._audit_status.configure(text="Running winget list — this may take a moment...", text_color="gray")
+        for w in self._audit_scroll.winfo_children():
+            w.destroy()
+        self._audit_checkboxes.clear()
+        for btn in (self._audit_copy_btn, self._audit_save_btn,
+                    self._audit_export_btn, self._audit_install_btn):
+            btn.configure(state="disabled")
+
+        approved_ids = set()
+        for app in self.common_data.get("common_apps", []):
+            if app.get("winget_id"):
+                approved_ids.add(app["winget_id"].lower())
+        for apps_list in self.teams_data.get("teams", {}).values():
+            for app in apps_list:
+                if app.get("winget_id"):
+                    approved_ids.add(app["winget_id"].lower())
+
+        def task():
+            rc, out = run_inline_powershell("winget list --accept-source-agreements 2>&1")
+            installed = _parse_winget_list(out)
+
+            def done():
+                self._audit_btn.configure(state="normal", text="Scan Installed Apps")
+                if not installed:
+                    self._audit_status.configure(
+                        text="No apps found — winget may not be available or output could not be parsed.",
+                        text_color="#E57373")
+                    return
+
+                with_id    = [a for a in installed if "." in a["id"]]
+                without_id = [a for a in installed if "." not in a["id"]]
+                approved   = [a for a in with_id if a["id"].lower() in approved_ids]
+                unknown    = [a for a in with_id if a["id"].lower() not in approved_ids]
+                self._audit_results = {"approved": approved, "unknown": unknown, "all": with_id}
+
+                self._audit_status.configure(
+                    text=f"{len(installed)} apps found  •  {len(with_id)} have winget IDs  •  {len(without_id)} no ID (cannot script)",
+                    text_color="gray")
+
+                row_idx = 0
+                small = ctk.CTkFont(size=11)
+
+                def _section(label, color):
+                    nonlocal row_idx
+                    ctk.CTkLabel(self._audit_scroll, text=label, text_color=color,
+                                 font=ctk.CTkFont(size=12, weight="bold")).grid(
+                        row=row_idx, column=0, columnspan=3, sticky="w", padx=6, pady=(8, 2))
+                    row_idx += 1
+
+                def _app_row(app, badge, badge_color):
+                    nonlocal row_idx
+                    var = ctk.BooleanVar(value=True)
+                    self._audit_checkboxes[app["id"]] = (var, app)
+                    ctk.CTkCheckBox(self._audit_scroll, text="", variable=var, width=28,
+                                    checkbox_width=18, checkbox_height=18).grid(
+                        row=row_idx, column=0, padx=(4, 0), pady=1, sticky="w")
+                    ctk.CTkLabel(self._audit_scroll, text=app["name"], anchor="w",
+                                 font=small).grid(row=row_idx, column=1, sticky="w", padx=4, pady=1)
+                    ctk.CTkLabel(self._audit_scroll, text=app["id"], anchor="w",
+                                 text_color="gray", font=small).grid(
+                        row=row_idx, column=2, sticky="w", padx=4, pady=1)
+                    row_idx += 1
+
+                _section(f"⚠  Unknown / Not in approved list  ({len(unknown)})", "#FFB74D")
+                for a in sorted(unknown, key=lambda x: x["name"].lower()):
+                    _app_row(a, "UNKNOWN", "#FFB74D")
+
+                _section(f"✓  Approved  ({len(approved)})", "#81C784")
+                for a in sorted(approved, key=lambda x: x["name"].lower()):
+                    _app_row(a, "APPROVED", "#81C784")
+
+                if without_id:
+                    _section(f"—  No Winget ID (cannot script)  ({len(without_id)})", "gray")
+                    for a in sorted(without_id, key=lambda x: x["name"].lower()):
+                        ctk.CTkLabel(self._audit_scroll, text=f"   {a['name']}",
+                                     anchor="w", font=small, text_color="gray").grid(
+                            row=row_idx, column=0, columnspan=3, sticky="w", padx=6, pady=1)
+                        row_idx += 1
+
+                for btn in (self._audit_copy_btn, self._audit_save_btn,
+                            self._audit_export_btn, self._audit_install_btn):
+                    btn.configure(state="normal")
+                log(f"Software audit: {len(installed)} installed, {len(unknown)} unknown")
+
+            self.after(0, done)
 
         threading.Thread(target=task, daemon=True).start()

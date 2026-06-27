@@ -102,6 +102,7 @@ class ConfigTab(ctk.CTkFrame):
         self.role = role
         self._running = False
         self._feature_vars = {}
+        self._wu_pending_count = 0
         self._build()
 
     def _build(self):
@@ -163,6 +164,29 @@ class ConfigTab(ctk.CTkFrame):
             btn = ctk.CTkButton(right, text=label, anchor="w",
                                  command=lambda t=target: self._open_panel(t))
             btn.grid(row=k + 1, column=0, padx=14, pady=3, sticky="ew")
+
+        # Windows Update
+        ctk.CTkLabel(right, text="Windows Update",
+                     font=ctk.CTkFont(size=14, weight="bold"), anchor="w").grid(
+            row=len(PANELS) + 2, column=0, padx=14, pady=(16, 6), sticky="w")
+
+        wu_btn_row = ctk.CTkFrame(right, fg_color="transparent")
+        wu_btn_row.grid(row=len(PANELS) + 3, column=0, padx=14, pady=(0, 4), sticky="w")
+        self._wu_check_btn = ctk.CTkButton(wu_btn_row, text="Check for Updates", width=155,
+                                            command=self._wu_check)
+        self._wu_check_btn.grid(row=0, column=0, padx=(0, 8))
+        self._wu_install_btn = ctk.CTkButton(wu_btn_row, text="Install All", width=110,
+                                              fg_color="#2e7d32", hover_color="#1b5e20",
+                                              command=self._wu_install, state="disabled")
+        self._wu_install_btn.grid(row=0, column=1)
+
+        self._wu_count_label = ctk.CTkLabel(right, text="", text_color="gray",
+                                             font=ctk.CTkFont(size=11))
+        self._wu_count_label.grid(row=len(PANELS) + 4, column=0, padx=14, pady=(2, 2), sticky="w")
+
+        self._wu_list_box = ctk.CTkTextbox(right, height=130, state="disabled",
+                                            font=ctk.CTkFont(family="Courier New", size=11))
+        self._wu_list_box.grid(row=len(PANELS) + 5, column=0, padx=14, pady=(0, 14), sticky="ew")
 
         # ── Output ─────────────────────────────────────────────────
         desc_frame = ctk.CTkFrame(wrap, height=44)
@@ -252,6 +276,106 @@ class ConfigTab(ctk.CTkFrame):
             def done():
                 self._sheets_status.configure(
                     text=msg, text_color="#81C784" if ok else "#E57373")
+            self.after(0, done)
+
+        threading.Thread(target=task, daemon=True).start()
+
+    # ── Windows Update ─────────────────────────────────────────────
+
+    def _wu_check(self):
+        self._wu_check_btn.configure(text="Checking...", state="disabled")
+        self._wu_install_btn.configure(state="disabled")
+        self._wu_count_label.configure(text="Scanning for pending updates...")
+        self._wu_list_box.configure(state="normal")
+        self._wu_list_box.delete("1.0", "end")
+        self._wu_list_box.configure(state="disabled")
+
+        cmd = (
+            "$sess = New-Object -ComObject Microsoft.Update.Session; "
+            "$srch = $sess.CreateUpdateSearcher(); "
+            "try { "
+            "  $res = $srch.Search('IsInstalled=0 and Type=''Software'' and IsHidden=0'); "
+            "  Write-Host \"COUNT: $($res.Updates.Count)\"; "
+            "  for ($i=0; $i -lt $res.Updates.Count; $i++) { "
+            "    Write-Host \"UPDATE: $($res.Updates.Item($i).Title)\" "
+            "  } "
+            "} catch { Write-Host \"ERROR: $_\" }"
+        )
+
+        def task():
+            rc, out = run_inline_powershell(cmd)
+
+            def done():
+                self._wu_check_btn.configure(text="Check for Updates", state="normal")
+                lines = out.splitlines()
+                count_line = next((l for l in lines if l.startswith("COUNT:")), "")
+                try:
+                    count = int(count_line.split(":", 1)[1].strip())
+                except Exception:
+                    count = 0
+                self._wu_pending_count = count
+                updates = [l.split(":", 1)[1].strip() for l in lines if l.startswith("UPDATE:")]
+                errors  = [l for l in lines if l.startswith("ERROR:")]
+
+                self._wu_list_box.configure(state="normal")
+                self._wu_list_box.delete("1.0", "end")
+                if errors:
+                    self._wu_count_label.configure(text=f"Error: {errors[0]}", text_color="#E57373")
+                    self._wu_list_box.insert("1.0", "\n".join(errors))
+                elif count == 0:
+                    self._wu_count_label.configure(text="Up to date — no pending updates.", text_color="#81C784")
+                else:
+                    self._wu_count_label.configure(text=f"{count} update(s) pending", text_color="#FFB74D")
+                    self._wu_install_btn.configure(state="normal")
+                    self._wu_list_box.insert("1.0", "\n".join(f"• {u}" for u in updates))
+                self._wu_list_box.configure(state="disabled")
+
+            self.after(0, done)
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _wu_install(self):
+        if self._wu_pending_count == 0:
+            return
+        self._wu_install_btn.configure(state="disabled", text="Installing...")
+        self._wu_check_btn.configure(state="disabled")
+        self._wu_count_label.configure(text="Downloading and installing updates...", text_color="gray")
+
+        cmd = (
+            "$sess = New-Object -ComObject Microsoft.Update.Session; "
+            "$srch = $sess.CreateUpdateSearcher(); "
+            "$res = $srch.Search('IsInstalled=0 and Type=''Software'' and IsHidden=0'); "
+            "if ($res.Updates.Count -eq 0) { Write-Host 'No pending updates.'; exit }; "
+            "$coll = New-Object -ComObject Microsoft.Update.UpdateColl; "
+            "foreach ($u in $res.Updates) { $coll.Add($u) | Out-Null }; "
+            "$dl = $sess.CreateUpdateDownloader(); $dl.Updates = $coll; "
+            "Write-Host 'Downloading updates...'; $dl.Download() | Out-Null; "
+            "$inst = $sess.CreateUpdateInstaller(); $inst.Updates = $coll; "
+            "Write-Host 'Installing updates...'; $r = $inst.Install(); "
+            "Write-Host \"RESULT: $($r.ResultCode)\"; "
+            "if ($r.RebootRequired) { Write-Host 'REBOOT_REQUIRED' }; "
+            "Write-Host 'DONE'"
+        )
+
+        def task():
+            rc, out = run_inline_powershell(cmd, callback=self._safe_append)
+
+            def done():
+                self._wu_install_btn.configure(state="normal", text="Install All")
+                self._wu_check_btn.configure(state="normal")
+                if "DONE" in out:
+                    reboot = "REBOOT_REQUIRED" in out
+                    result_line = next((l for l in out.splitlines() if l.startswith("RESULT:")), "")
+                    success = "2" in result_line or "3" in result_line
+                    msg = "Updates installed." + (" Reboot required." if reboot else "")
+                    self._wu_count_label.configure(
+                        text=msg,
+                        text_color="#81C784" if success else "#FFB74D")
+                    log(f"WU install: {msg}", "success" if success else "warn")
+                    self._wu_pending_count = 0
+                else:
+                    self._wu_count_label.configure(text="Install may have failed — check Output.", text_color="#E57373")
+
             self.after(0, done)
 
         threading.Thread(target=task, daemon=True).start()

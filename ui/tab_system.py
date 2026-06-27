@@ -1,8 +1,10 @@
+import csv
 import customtkinter as ctk
 import json
 import os
 import threading
 import tkinter.messagebox as msgbox
+import tkinter.filedialog as filedialog
 from modules.runner import run_powershell, run_powershell_with_secret
 from modules.logger import log
 from modules import sheets_sync
@@ -214,9 +216,15 @@ class SystemTab(ctk.CTkFrame):
                                                font=ctk.CTkFont(size=12))
         self.sys_monitor_box.grid(row=8, column=1, columnspan=3, padx=(0, 20), pady=5, sticky="w")
 
-        self._sync_sheet_btn = ctk.CTkButton(details_frame, text="Sync to Google Sheet",
+        action_row = ctk.CTkFrame(details_frame, fg_color="transparent")
+        action_row.grid(row=9, column=0, columnspan=4, padx=20, pady=(8, 16), sticky="w")
+        self._sync_sheet_btn = ctk.CTkButton(action_row, text="Sync to Google Sheet",
                                               width=180, command=self._sync_to_sheet)
-        self._sync_sheet_btn.grid(row=9, column=0, columnspan=2, padx=20, pady=(8, 16), sticky="w")
+        self._sync_sheet_btn.grid(row=0, column=0, padx=(0, 8))
+        self._export_csv_btn = ctk.CTkButton(action_row, text="Export to CSV", width=130,
+                                              fg_color="#1565C0", hover_color="#0d3c6e",
+                                              command=self._export_csv)
+        self._export_csv_btn.grid(row=0, column=1)
 
         # --- Domain Join Section ---
         domain_frame = ctk.CTkFrame(scroll)
@@ -620,6 +628,40 @@ class SystemTab(ctk.CTkFrame):
             self.after(0, done)
 
         threading.Thread(target=task, daemon=True).start()
+
+    def _export_csv(self):
+        data = self._get_details_row()
+        default_name = f"{data.get('computer_name', 'system_info') or 'system_info'}.csv"
+        path = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+            initialfile=default_name,
+            title="Export System Info to CSV",
+        )
+        if not path:
+            return
+        headers = [
+            "Computer Name", "Operator Username", "Operator Email",
+            "Brand Name", "System Model", "System Serial No.",
+            "Processor", "RAM", "Disk Size", "Display / GPU",
+            "Windows Version", "Last Windows Update", "Monitor Details",
+        ]
+        row = [
+            data["computer_name"], data["operator"], data["email"],
+            data["brand"], data["model"], data["serial"],
+            data["processor"], data["ram"], data["disk"], data["display"],
+            data["windows"], data["last_update"], data["monitors"],
+        ]
+        try:
+            with open(path, "w", newline="", encoding="utf-8-sig") as f:
+                writer = csv.writer(f)
+                writer.writerow(headers)
+                writer.writerow(row)
+            self._append_output(f"Exported to {path}")
+            log(f"System info exported to CSV: {path}", "success")
+        except Exception as e:
+            self._append_output(f"ERROR: CSV export failed — {e}")
+            msgbox.showerror("Export Failed", str(e))
 
     def _browse_ous(self):
         domain = self.domain_name_entry.get().strip()

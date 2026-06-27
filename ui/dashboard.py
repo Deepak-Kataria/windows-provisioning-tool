@@ -2,6 +2,7 @@ import os
 import customtkinter as ctk
 from modules.paths import get_base_dir
 from ui.tab_system import SystemTab
+from ui.tab_network import NetworkTab
 from ui.tab_debloat import DebloatTab
 from ui.tab_apps import AppsTab
 from ui.tab_tweaks import TweaksTab
@@ -68,6 +69,7 @@ class Dashboard(ctk.CTkFrame):
 
         tab_definitions = [
             ("System", SystemTab),
+            ("Network", NetworkTab),
             ("Debloat", DebloatTab),
             ("Apps", AppsTab),
             ("Tweaks", TweaksTab),
@@ -77,7 +79,7 @@ class Dashboard(ctk.CTkFrame):
             ("Users", UsersTab),
         ]
 
-        admin_only = {"System", "Debloat", "Tweaks", "Config", "Cleanup", "Security", "Users"}
+        admin_only = {"System", "Network", "Debloat", "Tweaks", "Config", "Cleanup", "Security", "Users"}
 
         for tab_name, TabClass in tab_definitions:
             if tab_name in admin_only and self.role != "admin":
