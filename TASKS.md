@@ -1,41 +1,10 @@
 # IT Provisioning Tool — Task Tracker
 
-Last updated: 2026-06-26
+Last updated: 2026-07-10
 
 ---
 
 ## Pending
-
-
-
-### #9 — Cleanup Hub (3 sections: User Profiles, Windows Cleanup, Disk Analysis)
-**Status:** Pending  
-**Details:**  
-
-**Section A — User Profile Cleanup:**
-- List all user profiles on machine with last login date + profile size
-- Select profiles to clean AppData\Local and AppData\Roaming junk (Temp, cache, browser caches, thumbnails, crash dumps)
-- Show size before/after per profile
-- Warning before touching active/current user profile
-- Option to delete entire stale/orphaned profiles (with confirmation)
-
-**Section B — Windows Cleanup:**
-- Expand existing Cleanup tab into structured sections
-- Windows Update cache (`C:\Windows\SoftwareDistribution\Download`)
-- WinSxS component cleanup (via DISM `/StartComponentCleanup`)
-- Temp files (User Temp, Windows Temp, Prefetch)
-- Windows Error Reporting / crash dumps
-- Recycle Bin (all users)
-- Hibernate file (`hiberfil.sys`) — disable option to reclaim space
-- Old Windows installations (`Windows.old`)
-- Show size per category, select/clean individually
-
-**Section C — Disk Analysis:**
-- Folder size breakdown (top-level tree — which folders eat most space, WinDirStat-lite view)
-- Drill-down: click folder to see sub-folder breakdown
-- Drive health: SMART status via PowerShell/WMI, free space per drive, health status (Good/Warning/Critical)
-- Free space bar per drive (visual)
-- Flag drives below 10% free as warning
 
 ---
 
@@ -78,14 +47,15 @@ Last updated: 2026-06-26
 ---
 
 ### #10 — Expand Security tab with more vulnerability checks
-**Status:** Pending  
-**Details:**  
-- Current: 13 checks (Firewall, RDP, SMBv1, Guest, AutoLogon, Defender, UAC, Updates, BitLocker, SMB signing, Password policy, Remote Registry, Telnet)
-- Add: open ports scan, running services audit, scheduled tasks (suspicious), installed software vs known-vulnerable list, outdated driver check, local admin account audit, shared folders exposure, LAPS status, certificate expiry, boot integrity (Secure Boot/UEFI), NTLM settings, USB/removable media policy, DNS poisoning exposure
-- Group checks into categories (Network, Accounts, System, Policy, Hardware)
-- Severity scoring — show overall risk score at top
-- Bulk Fix All button per category
-- Export report improvements (HTML or structured txt)
+**Status:** Partially done — 10 new checks added 2026-07-15
+**Details:**
+- Current: 23 checks. Original 13 (Firewall, RDP, SMBv1, Guest, AutoLogon, Defender, UAC, Updates, BitLocker, SMB signing, Password policy, Remote Registry, Telnet) + 10 new: RDP NLA, Office Macro ASR rule, WDigest cleartext creds, LSA Protection (RunAsPPL), Print Spooler exposure, SMB null session/anonymous enum, Cached domain logon count, Unquoted service paths, Default admin shares (C$/ADMIN$), Weak TLS protocols (SChannel).
+- Every check now has an `impact` field shown under the result row ("If fixed: ...") describing the tradeoff/side-effect of applying the fix — included in Copy/Export reports too.
+- Still to add: open ports scan, running services audit, scheduled tasks (suspicious), installed software vs known-vulnerable list, outdated driver check, local admin account audit, shared folders exposure (beyond C$/ADMIN$), LAPS status, certificate expiry, boot integrity (Secure Boot/UEFI), USB/removable media policy, DNS poisoning exposure (LLMNR/NBT-NS)
+- Still to add: Group checks into categories (Network, Accounts, System, Policy, Hardware)
+- Still to add: Severity scoring — show overall risk score at top
+- Still to add: Bulk Fix All button per category
+- Still to add: Export report improvements (HTML or structured txt)
 
 ---
 
@@ -125,6 +95,14 @@ Last updated: 2026-06-26
 ---
 
 ## Completed (this session continued)
+
+### #9 — Cleanup Hub (3 sections: User Profiles, Windows Cleanup, Disk Analysis) ✓
+**Completed:** 2026-07-10
+**Result:** Cleanup tab restructured into a hub (`ui/tab_cleanup.py`) with an inner `CTkTabview` hosting three sections:
+- **User Profiles** (`ui/cleanup_profiles.py`, new) — lists real profiles via new `scripts/get_user_profiles.ps1` (SID/username/path/last-login/loaded). Scan Sizes computes reclaimable AppData junk per profile (Temp, browser caches, INetCache, cookies, recent items, WER, thumbnail/icon cache). Clean Selected wipes junk for checked profiles with before/after size report. Active/current-user profiles are flagged and require an extra confirm. Delete Profile uses `Win32_UserProfile.Delete()` (proper deprovisioning, not raw folder removal), blocked for active/current profiles.
+- **Windows Cleanup** — the pre-existing fully-built tab (`ui/cleanup_windows.py`, moved/renamed `WindowsCleanupSection`, no behavior change) already covered every bullet in this section's original spec (WU cache, WinSxS/DISM, Temp/Prefetch, WER, Recycle Bin, hiberfil.sys, Windows.old).
+- **Disk Analysis** (`ui/cleanup_disk.py`, new) — drive panel via new `scripts/get_drive_health.ps1` (size/free/SMART-ish health from `Get-PhysicalDisk`), free-space bar colored red under 10% free, health badge. Folder breakdown is a WinDirStat-lite browser: drive dropdown + editable path + Up/Go, "Scan This Folder" lists immediate subfolders sorted by size (largest first), click a row to drill in.
+- Added shared `format_size()` to `modules/utils.py` (was duplicated locally in the old cleanup tab).
 
 ### #6 — Update project memory with session context ✓
 **Completed:** 2026-06-24
