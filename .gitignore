@@ -11,3 +11,4 @@ _build_env/
 .claude/
 *logs*.txt
 *logs*.doc
+gpresult.html
