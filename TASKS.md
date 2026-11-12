@@ -1,6 +1,6 @@
 # IT Provisioning Tool — Task Tracker
 
-Last updated: 2026-07-10
+Last updated: 2026-11-12
 
 ---
 
@@ -46,19 +46,6 @@ Last updated: 2026-07-10
 
 ---
 
-### #10 — Expand Security tab with more vulnerability checks
-**Status:** Partially done — 10 new checks added 2026-07-15
-**Details:**
-- Current: 23 checks. Original 13 (Firewall, RDP, SMBv1, Guest, AutoLogon, Defender, UAC, Updates, BitLocker, SMB signing, Password policy, Remote Registry, Telnet) + 10 new: RDP NLA, Office Macro ASR rule, WDigest cleartext creds, LSA Protection (RunAsPPL), Print Spooler exposure, SMB null session/anonymous enum, Cached domain logon count, Unquoted service paths, Default admin shares (C$/ADMIN$), Weak TLS protocols (SChannel).
-- Every check now has an `impact` field shown under the result row ("If fixed: ...") describing the tradeoff/side-effect of applying the fix — included in Copy/Export reports too.
-- Still to add: open ports scan, running services audit, scheduled tasks (suspicious), installed software vs known-vulnerable list, outdated driver check, local admin account audit, shared folders exposure (beyond C$/ADMIN$), LAPS status, certificate expiry, boot integrity (Secure Boot/UEFI), USB/removable media policy, DNS poisoning exposure (LLMNR/NBT-NS)
-- Still to add: Group checks into categories (Network, Accounts, System, Policy, Hardware)
-- Still to add: Severity scoring — show overall risk score at top
-- Still to add: Bulk Fix All button per category
-- Still to add: Export report improvements (HTML or structured txt)
-
----
-
 ### #11 — Domain join self-service for normal users
 **Status:** Pending  
 **Details:**  
@@ -95,6 +82,18 @@ Last updated: 2026-07-10
 ---
 
 ## Completed (this session continued)
+
+### #10 — Expand Security tab with more vulnerability checks ✓
+**Completed:** 2026-11-12 (needs a test run on a real machine — see below)
+**Result:** 36 checks (was 23). Check definitions moved to `modules/security_checks.py` and report builders to `modules/security_report.py` so #13 can reuse both.
+- **13 new checks:** open listening ports, shared folder exposure (Everyone/Guest), LLMNR/NetBIOS poisoning, local admin accounts, LAPS status, running services audit (SNMP/UPnP/WinRM/FTP/IIS/sshd/TeamViewer/AnyDesk/VNC…), suspicious scheduled tasks (unsigned exes in user-writable paths, encoded/download one-liners), known-vulnerable/EOL software (static `KNOWN_VULNERABLE` list — review periodically), machine certificate expiry, AutoRun on removable drives, Secure Boot/UEFI/TPM, driver health/outdated drivers, USB mass storage policy.
+- **Categories:** Network / Accounts / System / Policy / Hardware; within a category failures sort first. Each row shows a severity badge.
+- **Risk score:** CLEAN/LOW/MEDIUM/HIGH/CRITICAL level (same scale #13 will use) + 0–100 score from weighted severity×status penalties.
+- **Fix All per category:** confirmation dialog lists only reversible fixes (have `undo_ps`) for failing checks, with impact text; fixes marked disruptive (RDP, Spooler, admin shares, USB, TLS 1.0, cached logons, SMBv1, LLMNR/NetBIOS) are unticked by default. Each fix is re-verified and logged via `log_change()`.
+- **Export:** writes HTML + structured TXT to `logs/security_scan_<PC>_<timestamp>.*` and opens the HTML. Header includes machine, domain, OS, user, risk level.
+- Checks now run 6 in parallel via new `run_encoded_powershell()` (`-EncodedCommand`, 120s timeout, no quoting issues).
+- "Open X" style fixes (Updates, BitLocker, review consoles) just open the console — no longer logged as changes.
+- Fixed: export tagged fixed checks as "[REVERTED]"; `after(0, widget.configure, {...})` calls passed options as `require_redraw` so progress text never updated.
 
 ### #9 — Cleanup Hub (3 sections: User Profiles, Windows Cleanup, Disk Analysis) ✓
 **Completed:** 2026-07-10

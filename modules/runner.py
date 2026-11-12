@@ -187,6 +187,30 @@ def run_local_installer(path: str, args: list = None, callback=None, process_hol
     return process.returncode, "\n".join(output_lines)
 
 
+def run_encoded_powershell(script: str, timeout: int = 120):
+    """Run a multi-line PowerShell script via -EncodedCommand (no command-line quoting issues).
+
+    Returns (returncode, output) in the same shape as run_inline_powershell; stderr lines are
+    appended with an "ERR: " prefix. A hung script is killed after `timeout` seconds.
+    """
+    import base64
+    prelude = ("$ProgressPreference='SilentlyContinue';"
+               "[Console]::OutputEncoding=[Text.Encoding]::UTF8;\n")
+    encoded = base64.b64encode((prelude + script).encode("utf-16-le")).decode("ascii")
+    cmd = ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+           "-EncodedCommand", encoded]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
+                              errors="replace", timeout=timeout,
+                              creationflags=subprocess.CREATE_NO_WINDOW)
+    except subprocess.TimeoutExpired:
+        return -1, f"ERR: timed out after {timeout}s"
+    lines = [ln.strip() for ln in proc.stdout.splitlines() if ln.strip()]
+    lines += [f"ERR: {ln.strip()}" for ln in proc.stderr.splitlines()
+              if ln.strip() and not ln.startswith("#< CLIXML") and "<Objs " not in ln]
+    return proc.returncode, "\n".join(lines)
+
+
 def run_inline_powershell(script: str, callback=None):
     cmd = ["powershell.exe", "-ExecutionPolicy", "Bypass", "-Command", script]
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
