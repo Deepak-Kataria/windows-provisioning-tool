@@ -3,11 +3,11 @@ import tkinter as tk
 
 import customtkinter as ctk
 
+from ui import theme as T
+
 # ── Tooltip ─────────────────────────────────────────────────────────
 
 _TIP_DELAY_MS = 500
-_TIP_BG = ("#ffffe1", "#2b2b2b")
-_TIP_FG = ("#1a1a1a", "#e6e6e6")
 
 
 class Tooltip:
@@ -39,15 +39,15 @@ class Tooltip:
         self._after_id = None
         if self._tip or not self.text or not self.widget.winfo_exists():
             return
-        dark = ctk.get_appearance_mode() == "Dark"
         x = self.widget.winfo_rootx() + 12
         y = self.widget.winfo_rooty() + self.widget.winfo_height() + 4
         self._tip = tw = tk.Toplevel(self.widget)
         tw.wm_overrideredirect(True)
         tw.wm_attributes("-topmost", True)
+        tw.configure(bg=T.ACCENT_DIM)   # 1px border colour
         tk.Label(tw, text=self.text, justify="left", wraplength=self.wraplength,
-                 bg=_TIP_BG[dark], fg=_TIP_FG[dark], relief="solid", borderwidth=1,
-                 font=("Segoe UI", 9), padx=6, pady=3).pack()
+                 bg=T.PANEL_2, fg=T.TEXT, borderwidth=0,
+                 font=(T.UI_FAMILY, 9), padx=8, pady=4).pack(padx=1, pady=1)
         tw.wm_geometry(f"+{x}+{y}")
 
     def _hide(self, _event=None):
@@ -83,9 +83,10 @@ def confirm_run(parent, title, intro, items, action_text="Run", danger=False, fo
     dlg.grid_columnconfigure(0, weight=1)
     dlg.grid_rowconfigure(2, weight=1)
 
-    ctk.CTkLabel(dlg, text=title, font=ctk.CTkFont(size=15, weight="bold"), anchor="w").grid(
+    ctk.CTkLabel(dlg, text=("⚠  " if danger else "▸  ") + title.upper(), font=T.mono(13, "bold"),
+                 text_color=T.WARN if danger else T.ACCENT, anchor="w").grid(
         row=0, column=0, padx=16, pady=(14, 2), sticky="w")
-    ctk.CTkLabel(dlg, text=intro, font=ctk.CTkFont(size=12), text_color="gray",
+    ctk.CTkLabel(dlg, text=intro, font=ctk.CTkFont(size=12), text_color=T.MUTED,
                  wraplength=480, justify="left", anchor="w").grid(
         row=1, column=0, padx=16, pady=(0, 6), sticky="w")
 
@@ -93,15 +94,14 @@ def confirm_run(parent, title, intro, items, action_text="Run", danger=False, fo
     box.grid(row=2, column=0, padx=16, pady=4, sticky="nsew")
     box.grid_columnconfigure(0, weight=1)
     for i, (text, hot) in enumerate(norm):
-        ctk.CTkLabel(box, text=f"•  {text}", anchor="w", justify="left", wraplength=440,
-                     font=ctk.CTkFont(size=12),
-                     text_color=("#c0392b", "#ff7675") if hot else None).grid(
+        ctk.CTkLabel(box, text=f"›  {text}", anchor="w", justify="left", wraplength=440,
+                     font=T.mono(12), text_color=T.FAIL if hot else T.TEXT).grid(
             row=i, column=0, padx=6, pady=1, sticky="w")
 
     row = 3
     if footer:
         ctk.CTkLabel(dlg, text=footer, font=ctk.CTkFont(size=11, slant="italic"),
-                     text_color=("#c0392b", "#ff7675") if danger else "gray",
+                     text_color=T.FAIL if danger else T.MUTED,
                      wraplength=480, justify="left", anchor="w").grid(
             row=row, column=0, padx=16, pady=(6, 0), sticky="w")
         row += 1
@@ -118,7 +118,7 @@ def confirm_run(parent, title, intro, items, action_text="Run", danger=False, fo
     btns.grid(row=row, column=0, padx=16, pady=(10, 14), sticky="e")
     ctk.CTkButton(btns, text="Cancel", width=100, fg_color="transparent", border_width=1,
                   command=lambda: close(False)).grid(row=0, column=0, padx=(0, 8))
-    kw = {"fg_color": "#c0392b", "hover_color": "#922b21"} if danger else {}
+    kw = {"fg_color": T.DANGER, "hover_color": T.DANGER_HOVER} if danger else {}
     ctk.CTkButton(btns, text=action_text, width=150, command=lambda: close(True), **kw).grid(
         row=0, column=1)
 
@@ -160,29 +160,11 @@ def _resolve(target):
     return target
 
 
-def install_shortcuts(owner, get_active):
-    """Bind tab shortcuts on owner's toplevel; get_active() returns the visible tab widget.
-
-    Bindings are removed when owner is destroyed (e.g. on logout).
-    """
+def bind_root(owner, bindings):
+    """Bind {sequence: handler} on owner's toplevel window; unbound when owner is destroyed
+    (e.g. on logout), so a rebuilt dashboard doesn't stack duplicate handlers."""
     root = owner.winfo_toplevel()
-    bound = []
-
-    def make_handler(method):
-        def handler(event):
-            # In text fields, let Ctrl+A select text as usual.
-            if event.widget.winfo_class() in _TEXT_CLASSES:
-                return None
-            target = _resolve(get_active())
-            fn = getattr(target, method, None) if target is not None else None
-            if callable(fn):
-                fn()
-                return "break"
-            return None
-        return handler
-
-    for seq, method in SHORTCUTS.items():
-        bound.append((seq, root.bind(seq, make_handler(method), add="+")))
+    bound = [(seq, root.bind(seq, fn, add="+")) for seq, fn in bindings.items()]
 
     def cleanup(event):
         if event.widget is not owner:
@@ -197,3 +179,22 @@ def install_shortcuts(owner, get_active):
     # tk.Misc.bind directly: CTk widgets redirect .bind() to their inner canvas,
     # whose <Destroy> event would never have owner as event.widget.
     tk.Misc.bind(owner, "<Destroy>", cleanup, "+")
+
+
+def install_shortcuts(owner, get_active):
+    """Bind tab shortcuts on owner's toplevel; get_active() returns the visible tab widget."""
+
+    def make_handler(method):
+        def handler(event):
+            # In text fields, let Ctrl+A select text as usual.
+            if event.widget.winfo_class() in _TEXT_CLASSES:
+                return None
+            target = _resolve(get_active())
+            fn = getattr(target, method, None) if target is not None else None
+            if callable(fn):
+                fn()
+                return "break"
+            return None
+        return handler
+
+    bind_root(owner, {seq: make_handler(method) for seq, method in SHORTCUTS.items()})

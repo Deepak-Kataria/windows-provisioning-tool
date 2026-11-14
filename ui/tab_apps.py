@@ -1,5 +1,7 @@
 import re
 import customtkinter as ctk
+
+from ui import theme as T
 import json
 import os
 import threading
@@ -68,7 +70,7 @@ class AppsTab(ctk.CTkFrame):
                       font=ctk.CTkFont(size=15, weight="bold")).grid(
             row=0, column=0, sticky="w", padx=16, pady=(16, 2))
         ctk.CTkLabel(common_frame, text="Installed on all machines",
-                      text_color="gray", font=ctk.CTkFont(size=11)).grid(
+                      text_color=T.MUTED, font=ctk.CTkFont(size=11)).grid(
             row=1, column=0, sticky="w", padx=16, pady=(0, 6))
 
         scroll_common = ctk.CTkScrollableFrame(common_frame, height=260)
@@ -84,10 +86,10 @@ class AppsTab(ctk.CTkFrame):
         self.common_btn = ctk.CTkButton(common_btn_row, text="Install Selected",
                                          command=self._install_common)
         self.common_btn.grid(row=0, column=0, padx=(0, 6))
-        ctk.CTkButton(common_btn_row, text="Select All", width=90,
+        ctk.CTkButton(common_btn_row, text="Select All", fg_color="transparent", border_width=1, width=90,
                        command=lambda: [v.set(True) for v, _ in self.common_checkboxes.values()]).grid(
             row=0, column=1, padx=4)
-        ctk.CTkButton(common_btn_row, text="Deselect All", width=90,
+        ctk.CTkButton(common_btn_row, text="Deselect All", fg_color="transparent", border_width=1, width=90,
                        command=lambda: [v.set(False) for v, _ in self.common_checkboxes.values()]).grid(
             row=0, column=2, padx=4)
 
@@ -129,10 +131,10 @@ class AppsTab(ctk.CTkFrame):
         self.team_btn = ctk.CTkButton(team_btn_row, text="Install Selected",
                                        command=self._install_team)
         self.team_btn.grid(row=0, column=0, padx=(0, 6))
-        ctk.CTkButton(team_btn_row, text="Select All", width=90,
+        ctk.CTkButton(team_btn_row, text="Select All", fg_color="transparent", border_width=1, width=90,
                        command=lambda: [v.set(True) for v, _ in self.team_checkboxes.values()]).grid(
             row=0, column=1, padx=4)
-        ctk.CTkButton(team_btn_row, text="Deselect All", width=90,
+        ctk.CTkButton(team_btn_row, text="Deselect All", fg_color="transparent", border_width=1, width=90,
                        command=lambda: [v.set(False) for v, _ in self.team_checkboxes.values()]).grid(
             row=0, column=2, padx=4)
 
@@ -160,7 +162,7 @@ class AppsTab(ctk.CTkFrame):
                            command=self._add_local_app_dialog).grid(row=0, column=1, sticky="e")
 
         ctk.CTkLabel(local_frame, text="Installed from local or network path — no internet required",
-                      text_color="gray", font=ctk.CTkFont(size=11)).grid(
+                      text_color=T.MUTED, font=ctk.CTkFont(size=11)).grid(
             row=1, column=0, sticky="w", padx=16, pady=(0, 6))
 
         self.scroll_local = ctk.CTkScrollableFrame(local_frame, height=120)
@@ -174,10 +176,10 @@ class AppsTab(ctk.CTkFrame):
         self.local_btn = ctk.CTkButton(local_btn_row, text="Install Local Apps",
                                         command=self._install_local)
         self.local_btn.grid(row=0, column=0, padx=(0, 8))
-        ctk.CTkButton(local_btn_row, text="Select All", width=90,
+        ctk.CTkButton(local_btn_row, text="Select All", fg_color="transparent", border_width=1, width=90,
                        command=lambda: [v.set(True) for v, _ in self.local_checkboxes.values()]).grid(
             row=0, column=1, padx=4)
-        ctk.CTkButton(local_btn_row, text="Deselect All", width=90,
+        ctk.CTkButton(local_btn_row, text="Deselect All", fg_color="transparent", border_width=1, width=90,
                        command=lambda: [v.set(False) for v, _ in self.local_checkboxes.values()]).grid(
             row=0, column=2, padx=4)
 
@@ -203,7 +205,7 @@ class AppsTab(ctk.CTkFrame):
                                           font=ctk.CTkFont(size=12))
         self.dl_app_label.grid(row=0, column=1, pady=(10, 2), sticky="w")
         self.dl_size_label = ctk.CTkLabel(self.dl_frame, text="",
-                                           font=ctk.CTkFont(size=11), text_color="gray")
+                                           font=ctk.CTkFont(size=11), text_color=T.MUTED)
         self.dl_size_label.grid(row=0, column=2, padx=(8, 16), pady=(10, 2), sticky="e")
 
         self.dl_bar = ctk.CTkProgressBar(self.dl_frame, height=14)
@@ -350,7 +352,7 @@ class AppsTab(ctk.CTkFrame):
             msg = "No local apps configured. Click '+ Add App' to add one." if self.role == "admin" \
                   else "No local apps configured."
             ctk.CTkLabel(self.scroll_local, text=msg,
-                          text_color="gray", font=ctk.CTkFont(size=11)).grid(
+                          text_color=T.MUTED, font=ctk.CTkFont(size=11)).grid(
                 row=0, column=0, sticky="w", padx=8, pady=8)
 
     def _add_local_app_dialog(self):

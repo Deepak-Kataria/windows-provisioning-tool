@@ -1,4 +1,6 @@
 import customtkinter as ctk
+
+from ui import theme as T
 import json
 import os
 import threading
@@ -87,17 +89,17 @@ class SystemTab(ctk.CTkFrame):
             row=4, column=0, padx=20, pady=8, sticky="w")
         self.preview_label = ctk.CTkLabel(rename_frame, text="---",
                                            font=ctk.CTkFont(size=14, weight="bold"),
-                                           text_color="#4FC3F7")
+                                           text_color=T.ACCENT)
         self.preview_label.grid(row=4, column=1, columnspan=2, padx=8, pady=8, sticky="w")
 
         ctk.CTkLabel(rename_frame, text="Domain Username:",
-                     text_color="gray").grid(row=5, column=0, padx=20, pady=(12, 4), sticky="w")
+                     text_color=T.MUTED).grid(row=5, column=0, padx=20, pady=(12, 4), sticky="w")
         self.rename_user_entry = ctk.CTkEntry(rename_frame, width=220,
                                                placeholder_text="DOMAIN\\username  (domain-joined only)")
         self.rename_user_entry.grid(row=5, column=1, columnspan=2, padx=8, pady=(12, 4), sticky="w")
 
         ctk.CTkLabel(rename_frame, text="Domain Password:",
-                     text_color="gray").grid(row=6, column=0, padx=20, pady=(4, 8), sticky="w")
+                     text_color=T.MUTED).grid(row=6, column=0, padx=20, pady=(4, 8), sticky="w")
         self.rename_pass_entry = ctk.CTkEntry(rename_frame, width=220, show="*",
                                                placeholder_text="Required when domain-joined")
         self.rename_pass_entry.grid(row=6, column=1, columnspan=2, padx=8, pady=(4, 8), sticky="w")
@@ -106,7 +108,7 @@ class SystemTab(ctk.CTkFrame):
             rename_frame,
             text="Local rename only  (skip AD update — use when computer account is missing in domain)",
             variable=self.local_rename_only,
-            text_color="gray"
+            text_color=T.MUTED
         )
         local_only_cb.grid(row=7, column=0, columnspan=3, padx=20, pady=(0, 8), sticky="w")
 
@@ -417,7 +419,7 @@ class SystemTab(ctk.CTkFrame):
                          font=ctk.CTkFont(size=15, weight="bold")).pack(padx=30, pady=(24, 6))
             ctk.CTkLabel(dlg, text="This computer is domain-joined. Renaming it requires\n"
                                     "an account with permission to update the AD computer object.",
-                         text_color="gray", justify="center").pack(padx=30, pady=(0, 16))
+                         text_color=T.MUTED, justify="center").pack(padx=30, pady=(0, 16))
 
             user_entry = ctk.CTkEntry(dlg, width=260, placeholder_text="DOMAIN\\username")
             user_entry.pack(padx=30, pady=(0, 8))
@@ -536,7 +538,7 @@ class SystemTab(ctk.CTkFrame):
         ctk.CTkLabel(dlg, text=f"New name:  {new_name}",
                      font=ctk.CTkFont(size=13)).pack(padx=30, pady=(0, 12))
         ctk.CTkLabel(dlg, text="A restart is required for the name change to take effect.",
-                     text_color="gray").pack(padx=30, pady=(0, 16))
+                     text_color=T.MUTED).pack(padx=30, pady=(0, 16))
 
         countdown_var = ctk.StringVar(value="Restarting in 30 seconds...")
         ctk.CTkLabel(dlg, textvariable=countdown_var,
@@ -769,7 +771,7 @@ class OUPickerDialog(ctk.CTkToplevel):
             w.destroy()
         for i, ou in enumerate(ous):
             ctk.CTkButton(self.scroll, text=ou, anchor="w",
-                           fg_color="transparent", hover_color=("#3a3a3a", "#2a2a2a"),
+                           fg_color="transparent", hover_color=T.PANEL_3,
                            command=lambda o=ou: self._pick(o)).grid(
                 row=i, column=0, sticky="ew", padx=4, pady=2)
 

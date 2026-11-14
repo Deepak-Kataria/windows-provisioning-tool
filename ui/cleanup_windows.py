@@ -1,4 +1,6 @@
 import customtkinter as ctk
+
+from ui import theme as T
 import threading
 import tkinter.messagebox as msgbox
 from modules.runner import run_inline_powershell
@@ -710,13 +712,13 @@ class WindowsCleanupSection(ctk.CTkFrame):
 
         ctk.CTkLabel(hdr,
                      text="Scan sizes first, then select and clean.  [!] items show a confirm dialog.",
-                     font=ctk.CTkFont(size=11), text_color="gray").grid(
+                     font=ctk.CTkFont(size=11), text_color=T.MUTED).grid(
             row=1, column=0, padx=14, pady=(0, 6), sticky="w")
 
         btn_row = ctk.CTkFrame(hdr, fg_color="transparent")
         btn_row.grid(row=2, column=0, padx=10, pady=(0, 8), sticky="w")
 
-        self._scan_btn = ctk.CTkButton(btn_row, text="Scan Sizes", width=110,
+        self._scan_btn = ctk.CTkButton(btn_row, text="Scan Sizes", fg_color="transparent", border_width=1, width=110,
                                        command=self._scan)
         self._scan_btn.grid(row=0, column=0, padx=(4, 6))
         tip(self._scan_btn, "Measure how much space each location uses. Nothing is deleted.")
@@ -728,19 +730,19 @@ class WindowsCleanupSection(ctk.CTkFrame):
         tip(self._clean_btn, "Delete the contents of the ticked locations (Ctrl+Enter). "
                              "You'll see the list before anything runs.")
 
-        tip(ctk.CTkButton(btn_row, text="Select All", width=90, command=self._select_all),
+        tip(ctk.CTkButton(btn_row, text="Select All", fg_color="transparent", border_width=1, width=90, command=self._select_all),
             "Tick every location (Ctrl+A)").grid(row=0, column=2, padx=6)
-        tip(ctk.CTkButton(btn_row, text="Select None", width=90, command=self._select_none),
+        tip(ctk.CTkButton(btn_row, text="Select None", fg_color="transparent", border_width=1, width=90, command=self._select_none),
             "Untick every location (Ctrl+Shift+A)").grid(row=0, column=3, padx=6)
 
         self._total_label = ctk.CTkLabel(hdr, text="Total selected: ---",
-                                         font=ctk.CTkFont(size=12), text_color="gray")
+                                         font=ctk.CTkFont(size=12), text_color=T.MUTED)
         self._total_label.grid(row=3, column=0, padx=14, pady=(0, 12), sticky="w")
 
         # ── Groups ─────────────────────────────────────────────────────
         grid_row = 1
         for grp in GROUPS:
-            grp_hdr = ctk.CTkFrame(wrap, fg_color=("gray85", "gray25"), corner_radius=6)
+            grp_hdr = ctk.CTkFrame(wrap, fg_color=T.PANEL_2, corner_radius=6)
             grp_hdr.grid(row=grid_row, column=0, padx=10, pady=(10, 0), sticky="ew")
             grp_hdr.grid_columnconfigure(0, weight=1)
 
@@ -752,11 +754,11 @@ class WindowsCleanupSection(ctk.CTkFrame):
                          font=ctk.CTkFont(size=12, weight="bold")).grid(
                 row=0, column=0, sticky="w")
 
-            ctk.CTkButton(inner, text="All", width=36, height=22,
+            ctk.CTkButton(inner, text="All", fg_color="transparent", border_width=1, width=36, height=22,
                           font=ctk.CTkFont(size=10),
                           command=lambda g=grp: self._group_select(g, True)).grid(
                 row=0, column=1, padx=(4, 2))
-            ctk.CTkButton(inner, text="None", width=44, height=22,
+            ctk.CTkButton(inner, text="None", fg_color="transparent", border_width=1, width=44, height=22,
                           font=ctk.CTkFont(size=10),
                           command=lambda g=grp: self._group_select(g, False)).grid(
                 row=0, column=2, padx=(2, 0))
@@ -784,7 +786,7 @@ class WindowsCleanupSection(ctk.CTkFrame):
                 cb.grid(row=i, column=0, padx=(14, 6), pady=5, sticky="w")
 
                 size_lbl = ctk.CTkLabel(items_card, text="---",
-                                        text_color="gray", font=ctk.CTkFont(size=11))
+                                        text_color=T.MUTED, font=ctk.CTkFont(size=11))
                 size_lbl.grid(row=i, column=1, padx=(0, 14), pady=5, sticky="e")
                 self._size_labels[loc["id"]] = size_lbl
 
@@ -797,7 +799,7 @@ class WindowsCleanupSection(ctk.CTkFrame):
         grid_row += 1
 
         self._output = ctk.CTkTextbox(wrap, height=220, state="disabled",
-                                      font=ctk.CTkFont(family="Courier New", size=11))
+                                      font=ctk.CTkFont(family=T.MONO_FAMILY, size=11))
         self._output.grid(row=grid_row, column=0, padx=10, pady=(0, 10), sticky="ew")
 
         self._update_total()
@@ -865,7 +867,7 @@ class WindowsCleanupSection(ctk.CTkFrame):
 
     def _update_size_label(self, loc_id, val):
         lbl = self._size_labels[loc_id]
-        color = ("#1a1a1a", "white") if val > 0 else "gray"
+        color = T.TEXT_BRIGHT if val > 0 else T.MUTED
         lbl.configure(text=format_size(val), text_color=color)
 
     # ── Scan ───────────────────────────────────────────────────────────

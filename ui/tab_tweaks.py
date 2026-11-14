@@ -1,4 +1,6 @@
 import customtkinter as ctk
+
+from ui import theme as T
 import json
 import os
 import threading
@@ -59,7 +61,7 @@ class TweaksTab(ctk.CTkFrame):
             row = self._add_tweak_row(left, tweak, row)
 
         # Org Settings
-        self._section_label(left, "Org Settings", row, color="#4FC3F7")
+        self._section_label(left, "Org Settings", row, color=T.ACCENT)
         row += 1
         for tweak in self._config.get("org", []):
             row = self._add_tweak_row(left, tweak, row)
@@ -67,10 +69,10 @@ class TweaksTab(ctk.CTkFrame):
         # Select All / None buttons
         btn_row = ctk.CTkFrame(left, fg_color="transparent")
         btn_row.grid(row=row, column=0, sticky="w", padx=8, pady=(10, 4))
-        tip(ctk.CTkButton(btn_row, text="Select All", width=100,
+        tip(ctk.CTkButton(btn_row, text="Select All", fg_color="transparent", border_width=1, width=100,
                           command=self.shortcut_select_all),
             "Tick every tweak, including Advanced ones (Ctrl+A)").grid(row=0, column=0, padx=(0, 6))
-        tip(ctk.CTkButton(btn_row, text="Deselect All", width=100,
+        tip(ctk.CTkButton(btn_row, text="Deselect All", fg_color="transparent", border_width=1, width=100,
                           command=self.shortcut_deselect_all),
             "Untick every tweak (Ctrl+Shift+A)").grid(row=0, column=1)
 
@@ -84,7 +86,7 @@ class TweaksTab(ctk.CTkFrame):
         for pref in self._config["preferences"]:
             prow = self._add_pref_row(right, pref, prow)
 
-        self._section_label(right, "Performance Plans", prow, color="#4FC3F7")
+        self._section_label(right, "Performance Plans", prow, color=T.ACCENT)
         prow += 1
         perf = self._config["performance"]
 
@@ -96,7 +98,7 @@ class TweaksTab(ctk.CTkFrame):
             row=prow, column=0, padx=12, pady=(6, 3), sticky="ew")
         prow += 1
         tip(ctk.CTkButton(right, text="Disable / Use Balanced Plan",
-                          fg_color="#555555", hover_color="#333333",
+                          fg_color=T.PANEL_3, hover_color=T.BORDER,
                           command=lambda: self._run_perf(perf["disable_cmd"], "Set Balanced Plan")),
             "Switch back to the Windows Balanced power plan").grid(
             row=prow, column=0, padx=12, pady=(3, 8), sticky="ew")
@@ -108,7 +110,7 @@ class TweaksTab(ctk.CTkFrame):
         desc_frame.grid_propagate(False)
         self._desc_label = ctk.CTkLabel(
             desc_frame, text="Hover over any tweak to see its description.",
-            text_color="gray", font=ctk.CTkFont(size=11), anchor="w", wraplength=900)
+            text_color=T.MUTED, font=ctk.CTkFont(size=11), anchor="w", wraplength=900)
         self._desc_label.grid(row=0, column=0, padx=12, pady=8, sticky="w")
 
         # ── Bottom: Buttons ────────────────────────────────────────
@@ -129,7 +131,7 @@ class TweaksTab(ctk.CTkFrame):
         tip(self._undo_btn, "Revert the ticked tweaks to Windows defaults")
 
         self._status_label = ctk.CTkLabel(action_frame, text="",
-                                           font=ctk.CTkFont(size=11), text_color="gray", anchor="w")
+                                           font=ctk.CTkFont(size=11), text_color=T.MUTED, anchor="w")
         self._status_label.grid(row=0, column=3, padx=16, sticky="w")
 
     # Keyboard shortcuts (see ui/widgets.py)
@@ -380,7 +382,7 @@ class TweaksTab(ctk.CTkFrame):
                 icon, color = "—", "#888888"
                 detail = err
 
-            row_frame = ctk.CTkFrame(scroll, fg_color=("gray90", "gray20"), corner_radius=6)
+            row_frame = ctk.CTkFrame(scroll, fg_color=T.PANEL_2, corner_radius=6)
             row_frame.grid(row=idx, column=0, sticky="ew", pady=2, padx=2)
             row_frame.grid_columnconfigure(1, weight=1)
 
@@ -400,7 +402,7 @@ class TweaksTab(ctk.CTkFrame):
             if ok is False and cmd:
                 short_cmd = cmd[:120] + "..." if len(cmd) > 120 else cmd
                 ctk.CTkLabel(row_frame, text=f"CMD: {short_cmd}", anchor="w",
-                              text_color="#555555", font=ctk.CTkFont(size=9, family="Courier New"),
+                              text_color=T.DIM, font=ctk.CTkFont(size=9, family=T.MONO_FAMILY),
                               wraplength=440).grid(
                     row=2, column=1, sticky="w", padx=4, pady=(0, 6))
 
@@ -408,7 +410,7 @@ class TweaksTab(ctk.CTkFrame):
         ctk.CTkLabel(dialog, text="Full Log",
                       font=ctk.CTkFont(size=12, weight="bold"), anchor="w").grid(
             row=2, column=0, padx=16, pady=(4, 2), sticky="w")
-        log_box = ctk.CTkTextbox(dialog, font=ctk.CTkFont(family="Courier New", size=11),
+        log_box = ctk.CTkTextbox(dialog, font=ctk.CTkFont(family=T.MONO_FAMILY, size=11),
                                   state="normal")
         log_box.grid(row=3, column=0, padx=16, pady=(0, 8), sticky="nsew")
         log_box.insert("1.0", log_text.strip() if log_text.strip() else "No output captured.")

@@ -20,7 +20,11 @@ if not getattr(sys, 'frozen', False):
         sys.exit(0)
 
 import customtkinter as ctk
-from ui.dashboard import Dashboard
+from ui.theme import apply_theme
+
+apply_theme()   # must run before any widget (and before tab modules build fonts)
+
+from ui.dashboard import Dashboard  # noqa: E402
 
 # AUTH_ENABLED = False — login bypassed during development.
 # To restore: set True and uncomment the login imports below.
@@ -29,16 +33,15 @@ AUTH_ENABLED = False
 # from ui.first_run_dialog import FirstRunDialog
 # from modules.auth import is_first_run
 
-ctk.set_appearance_mode("dark")
-ctk.set_default_color_theme("blue")
 
 
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("IT Provisioning Tool")
-        self.geometry("1000x700")
-        self.minsize(860, 600)
+        self.geometry("1180x740")
+        self.minsize(1000, 620)
+        self.after(0, lambda: self.state("zoomed"))   # tech-console feel: open maximised
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
         self._show_dashboard("admin", "admin", "Administrator")

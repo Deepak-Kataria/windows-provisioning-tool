@@ -6,6 +6,8 @@ from datetime import datetime
 
 import customtkinter as ctk
 
+from ui import theme as T
+
 from modules import security_checks as sc
 from modules import threat_report as tr
 from modules.logger import log
@@ -21,8 +23,8 @@ _STATUS_COLOR = {"PASS": "#27ae60", "FAIL": "#e74c3c", "WARN": "#e67e22",
 _STATUS_ICON  = {"PASS": "✓", "FAIL": "✗", "WARN": "⚠", "UNKNOWN": "?", "INFO": "i"}
 _LEVEL_COLOR  = {"CLEAN": "#27ae60", "LOW": "#2874a6", "MEDIUM": "#d35400",
                  "HIGH": "#c0392b", "CRITICAL": "#7b241c"}
-_HDR_BG       = ("gray82", "gray24")
-_PART_BG      = ("gray75", "gray28")
+_HDR_BG       = T.PANEL_2
+_PART_BG      = T.PANEL_3
 
 _SCAN_WORKERS = 6
 
@@ -42,7 +44,7 @@ class ThreatTab(ctk.CTkFrame):
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
-        top = ctk.CTkFrame(self, height=56, corner_radius=0, fg_color=("gray90", "gray17"))
+        top = ctk.CTkFrame(self, height=56, corner_radius=0, fg_color=T.PANEL)
         top.grid(row=0, column=0, sticky="ew")
         top.grid_columnconfigure(4, weight=1)
         top.grid_propagate(False)
@@ -68,7 +70,7 @@ class ThreatTab(ctk.CTkFrame):
         self._status_lbl = ctk.CTkLabel(
             top, text=f"{len(COMPROMISE_CHECKS)} compromise indicators + {len(sc.CHECKS)} "
                       f"vulnerability checks. Takes 1–3 minutes.",
-            text_color="gray", font=ctk.CTkFont(size=11))
+            text_color=T.MUTED, font=ctk.CTkFont(size=11))
         self._status_lbl.grid(row=0, column=4, padx=12, sticky="w")
 
         self._scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
@@ -76,7 +78,7 @@ class ThreatTab(ctk.CTkFrame):
         self._scroll.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
-            self._scroll, justify="center", text_color="gray", font=ctk.CTkFont(size=13),
+            self._scroll, justify="center", text_color=T.MUTED, font=ctk.CTkFont(size=13),
             text="Has this machine been compromised, and what could let it be?\n\n"
                  "Run a threat scan for a report with two parts:\n"
                  "Signs of Compromise  ·  Vulnerability Exposure"
@@ -95,11 +97,11 @@ class ThreatTab(ctk.CTkFrame):
         for b in (self._export_btn, self._copy_btn):
             b.configure(state="disabled")
         self._scan_btn.configure(state="disabled", text="Scanning...")
-        self._status_lbl.configure(text="Running checks...", text_color="gray")
+        self._status_lbl.configure(text="Running checks...", text_color=T.MUTED)
         for w in self._scroll.winfo_children():
             w.destroy()
         prog = ctk.CTkLabel(self._scroll, text=f"Scanning...  0 / {len(tr.ALL_CHECKS)}",
-                            text_color="gray", font=ctk.CTkFont(size=13))
+                            text_color=T.MUTED, font=ctk.CTkFont(size=13))
         prog.grid(row=0, column=0, pady=60)
         log("Threat report: scan started")
 
@@ -176,7 +178,7 @@ class ThreatTab(ctk.CTkFrame):
             ctk.CTkLabel(line, text=f" {level} ", fg_color=_LEVEL_COLOR[level], text_color="white",
                          corner_radius=4, height=20, font=ctk.CTkFont(size=11, weight="bold")
                          ).grid(row=0, column=1, padx=(0, 8))
-            ctk.CTkLabel(line, text=text, text_color="gray", font=ctk.CTkFont(size=12)
+            ctk.CTkLabel(line, text=text, text_color=T.MUTED, font=ctk.CTkFont(size=12)
                          ).grid(row=0, column=2)
         row += 1
 
@@ -185,7 +187,7 @@ class ThreatTab(ctk.CTkFrame):
         row = self._group(row, "Compromise indicators", COMPROMISE_CHECKS, compromise=True)
         if any(self._results.get("unapproved_admins", ("",))[0] == s for s in ("WARN", "UNKNOWN")):
             ctk.CTkLabel(self._scroll, text=f"Approved admin list: {APPROVED_ADMINS_FILE}",
-                         text_color="gray", font=ctk.CTkFont(size=10), anchor="w"
+                         text_color=T.MUTED, font=ctk.CTkFont(size=10), anchor="w"
                          ).grid(row=row, column=0, padx=16, sticky="w")
             row += 1
 
@@ -200,7 +202,7 @@ class ThreatTab(ctk.CTkFrame):
         hdr.grid(row=row, column=0, padx=12, pady=(18, 0), sticky="ew")
         ctk.CTkLabel(hdr, text=f"  {title}", font=ctk.CTkFont(size=15, weight="bold"),
                      anchor="w").grid(row=0, column=0, padx=6, pady=8, sticky="w")
-        ctk.CTkLabel(hdr, text=subtitle, text_color="gray", font=ctk.CTkFont(size=11),
+        ctk.CTkLabel(hdr, text=subtitle, text_color=T.MUTED, font=ctk.CTkFont(size=11),
                      anchor="w").grid(row=0, column=1, padx=6, sticky="w")
         return row + 1
 
@@ -233,7 +235,7 @@ class ThreatTab(ctk.CTkFrame):
     def _row(self, parent, idx, check, compromise):
         status, detail = self._results.get(check["id"], ("UNKNOWN", ""))
         color = _STATUS_COLOR.get(status, "gray")
-        bg = ("gray95", "gray18") if idx % 2 == 0 else ("gray90", "gray20")
+        bg = T.PANEL_2 if idx % 2 == 0 else T.PANEL_2
         r = ctk.CTkFrame(parent, fg_color=bg, corner_radius=0)
         r.grid(row=idx, column=0, sticky="ew")
         r.grid_columnconfigure(2, weight=1)
@@ -254,7 +256,7 @@ class ThreatTab(ctk.CTkFrame):
 
         ctk.CTkLabel(r, text=detail or check["description"], anchor="w", justify="left",
                      wraplength=430, font=ctk.CTkFont(size=11),
-                     text_color=color if detail else "gray"
+                     text_color=color if detail else T.MUTED
                      ).grid(row=0, column=2, padx=(0, 12), pady=(6, 0), sticky="w")
 
         flagged = status in ("FAIL", "WARN", "INFO")
@@ -265,7 +267,7 @@ class ThreatTab(ctk.CTkFrame):
             note = f"If fixed: {check['impact']}"
         if note:
             ctk.CTkLabel(r, text=note, anchor="w", justify="left", wraplength=430,
-                         text_color="gray", font=ctk.CTkFont(size=10, slant="italic")
+                         text_color=T.MUTED, font=ctk.CTkFont(size=10, slant="italic")
                          ).grid(row=1, column=2, padx=(0, 12), pady=(0, 6), sticky="w")
 
         if flagged and compromise and check.get("review_ps"):
@@ -277,7 +279,7 @@ class ThreatTab(ctk.CTkFrame):
     def _open_review(self, check):
         threading.Thread(target=run_encoded_powershell, args=(check["review_ps"],),
                          daemon=True).start()
-        self._status_lbl.configure(text=f"{check['review_label']}...", text_color="gray")
+        self._status_lbl.configure(text=f"{check['review_label']}...", text_color=T.MUTED)
 
     # ── Copy / export ─────────────────────────────────────────────
 
@@ -286,7 +288,7 @@ class ThreatTab(ctk.CTkFrame):
             return
         self.clipboard_clear()
         self.clipboard_append(tr.build_text(self._results))
-        self._status_lbl.configure(text="Report copied to clipboard.", text_color="gray")
+        self._status_lbl.configure(text="Report copied to clipboard.", text_color=T.MUTED)
 
     def _export_report(self):
         if not self._results:
@@ -306,7 +308,7 @@ class ThreatTab(ctk.CTkFrame):
             self._status_lbl.configure(text=f"Export failed: {e}", text_color="#e74c3c")
             return
         log(f"Threat report exported: {html_path} / {txt_path}")
-        self._status_lbl.configure(text=f"Report saved: {html_path} (+ .txt)", text_color="gray")
+        self._status_lbl.configure(text=f"Report saved: {html_path} (+ .txt)", text_color=T.MUTED)
         try:
             os.startfile(html_path)
         except OSError:

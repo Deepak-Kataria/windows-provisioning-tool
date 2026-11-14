@@ -1,4 +1,6 @@
 import customtkinter as ctk
+
+from ui import theme as T
 import json
 import os
 import threading
@@ -37,14 +39,14 @@ class DebloatTab(ctk.CTkFrame):
                       font=ctk.CTkFont(size=16, weight="bold")).grid(
             row=0, column=0, sticky="w", padx=20, pady=(16, 4))
         ctk.CTkLabel(header, text="Select apps to remove. Use Rollback below to reinstall if needed.",
-                      text_color="gray", font=ctk.CTkFont(size=12)).grid(
+                      text_color=T.MUTED, font=ctk.CTkFont(size=12)).grid(
             row=1, column=0, sticky="w", padx=20, pady=(0, 8))
 
         btn_frame = ctk.CTkFrame(header, fg_color="transparent")
         btn_frame.grid(row=2, column=0, padx=16, pady=(0, 12), sticky="w")
-        tip(ctk.CTkButton(btn_frame, text="Select All", width=110, command=self._select_all),
+        tip(ctk.CTkButton(btn_frame, text="Select All", fg_color="transparent", border_width=1, width=110, command=self._select_all),
             "Tick every app in the list (Ctrl+A)").grid(row=0, column=0, padx=4)
-        tip(ctk.CTkButton(btn_frame, text="Deselect All", width=110, command=self._deselect_all),
+        tip(ctk.CTkButton(btn_frame, text="Deselect All", fg_color="transparent", border_width=1, width=110, command=self._deselect_all),
             "Untick every app in the list (Ctrl+Shift+A)").grid(row=0, column=1, padx=4)
 
         # Scrollable app list grouped by category
@@ -62,7 +64,7 @@ class DebloatTab(ctk.CTkFrame):
         for category, apps in grouped.items():
             ctk.CTkLabel(scroll, text=category,
                           font=ctk.CTkFont(size=12, weight="bold"),
-                          text_color="#4FC3F7").grid(
+                          text_color=T.ACCENT).grid(
                 row=row, column=0, columnspan=3, sticky="w", padx=8, pady=(10, 2))
             row += 1
             col = 0
@@ -105,7 +107,7 @@ class DebloatTab(ctk.CTkFrame):
                       font=ctk.CTkFont(size=14, weight="bold")).grid(
             row=0, column=0, sticky="w", padx=20, pady=(14, 2))
         ctk.CTkLabel(rb_card, text="Select apps to reinstall via Microsoft Store (winget).",
-                      text_color="gray", font=ctk.CTkFont(size=11)).grid(
+                      text_color=T.MUTED, font=ctk.CTkFont(size=11)).grid(
             row=1, column=0, sticky="w", padx=20, pady=(0, 8))
 
         rb_scroll = ctk.CTkScrollableFrame(rb_card, height=120)
@@ -133,10 +135,10 @@ class DebloatTab(ctk.CTkFrame):
                                             command=self._reinstall_apps)
         self.reinstall_btn.grid(row=0, column=0, padx=(0, 8))
         tip(self.reinstall_btn, "Reinstall the ticked apps from the Microsoft Store using winget")
-        tip(ctk.CTkButton(rb_btn_row, text="Select All", width=90,
+        tip(ctk.CTkButton(rb_btn_row, text="Select All", fg_color="transparent", border_width=1, width=90,
                           command=lambda: [v.set(True) for v, _ in self.reinstall_checkboxes.values()]),
             "Tick every app in the reinstall list").grid(row=0, column=1, padx=4)
-        tip(ctk.CTkButton(rb_btn_row, text="Deselect All", width=90,
+        tip(ctk.CTkButton(rb_btn_row, text="Deselect All", fg_color="transparent", border_width=1, width=90,
                           command=lambda: [v.set(False) for v, _ in self.reinstall_checkboxes.values()]),
             "Untick every app in the reinstall list").grid(row=0, column=2, padx=4)
 

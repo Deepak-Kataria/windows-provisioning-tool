@@ -1,4 +1,6 @@
 import customtkinter as ctk
+
+from ui import theme as T
 import threading
 import os
 import tkinter.messagebox as msgbox
@@ -129,18 +131,18 @@ class ProfilesSection(ctk.CTkFrame):
         ctk.CTkLabel(hdr,
                      text="Junk size shown is reclaimable AppData cache/temp only, not total profile size.\n"
                           "Active/current-user profiles are flagged and need extra confirmation.",
-                     font=ctk.CTkFont(size=11), text_color="gray", justify="left").grid(
+                     font=ctk.CTkFont(size=11), text_color=T.MUTED, justify="left").grid(
             row=1, column=0, padx=14, pady=(0, 6), sticky="w")
 
         btn_row = ctk.CTkFrame(hdr, fg_color="transparent")
         btn_row.grid(row=2, column=0, padx=10, pady=(0, 8), sticky="w")
 
-        self._refresh_btn = ctk.CTkButton(btn_row, text="Refresh List", width=110,
+        self._refresh_btn = ctk.CTkButton(btn_row, text="Refresh List", fg_color="transparent", border_width=1, width=110,
                                           command=self._refresh_list)
         self._refresh_btn.grid(row=0, column=0, padx=(4, 6))
         tip(self._refresh_btn, "Reload the list of user profiles on this PC")
 
-        self._scan_btn = ctk.CTkButton(btn_row, text="Scan Sizes", width=110,
+        self._scan_btn = ctk.CTkButton(btn_row, text="Scan Sizes", fg_color="transparent", border_width=1, width=110,
                                        command=self._scan)
         self._scan_btn.grid(row=0, column=1, padx=6)
         tip(self._scan_btn, "Measure reclaimable cache/temp space per profile. Nothing is deleted.")
@@ -152,13 +154,13 @@ class ProfilesSection(ctk.CTkFrame):
         tip(self._clean_btn, "Delete cache/temp junk from the ticked profiles (Ctrl+Enter). "
                              "Documents and settings are not touched.")
 
-        tip(ctk.CTkButton(btn_row, text="Select All", width=90, command=self._select_all),
+        tip(ctk.CTkButton(btn_row, text="Select All", fg_color="transparent", border_width=1, width=90, command=self._select_all),
             "Tick every profile (Ctrl+A)").grid(row=0, column=3, padx=6)
-        tip(ctk.CTkButton(btn_row, text="Select None", width=90, command=self._select_none),
+        tip(ctk.CTkButton(btn_row, text="Select None", fg_color="transparent", border_width=1, width=90, command=self._select_none),
             "Untick every profile (Ctrl+Shift+A)").grid(row=0, column=4, padx=6)
 
         self._total_label = ctk.CTkLabel(hdr, text="Total selected: ---",
-                                         font=ctk.CTkFont(size=12), text_color="gray")
+                                         font=ctk.CTkFont(size=12), text_color=T.MUTED)
         self._total_label.grid(row=3, column=0, padx=14, pady=(0, 12), sticky="w")
 
         self._list_card = ctk.CTkFrame(wrap, corner_radius=6)
@@ -170,7 +172,7 @@ class ProfilesSection(ctk.CTkFrame):
             row=2, column=0, padx=10, pady=(12, 2), sticky="w")
 
         self._output = ctk.CTkTextbox(wrap, height=200, state="disabled",
-                                      font=ctk.CTkFont(family="Courier New", size=11))
+                                      font=ctk.CTkFont(family=T.MONO_FAMILY, size=11))
         self._output.grid(row=3, column=0, padx=10, pady=(0, 10), sticky="ew")
 
     # ── Helpers ────────────────────────────────────────────────────────
@@ -241,7 +243,7 @@ class ProfilesSection(ctk.CTkFrame):
         lbl = self._size_labels.get(sid)
         if not lbl:
             return
-        color = ("#1a1a1a", "white") if val > 0 else "gray"
+        color = T.TEXT_BRIGHT if val > 0 else T.MUTED
         lbl.configure(text=format_size(val), text_color=color)
 
     # ── List ───────────────────────────────────────────────────────────
@@ -302,7 +304,7 @@ class ProfilesSection(ctk.CTkFrame):
 
         if not self._profiles:
             ctk.CTkLabel(self._list_card, text="No profiles found.",
-                         text_color="gray").grid(row=0, column=0, padx=14, pady=14, sticky="w")
+                         text_color=T.MUTED).grid(row=0, column=0, padx=14, pady=14, sticky="w")
             return
 
         row = 0
@@ -323,11 +325,11 @@ class ProfilesSection(ctk.CTkFrame):
                 row=row, column=1, padx=(0, 6), pady=5, sticky="w")
 
             ctk.CTkLabel(self._list_card, text=f"Last login: {p['last_use']}",
-                         text_color="gray", font=ctk.CTkFont(size=11)).grid(
+                         text_color=T.MUTED, font=ctk.CTkFont(size=11)).grid(
                 row=row, column=2, padx=(0, 14), pady=5, sticky="w")
 
             size_lbl = ctk.CTkLabel(self._list_card, text="---",
-                                    text_color="gray", font=ctk.CTkFont(size=11))
+                                    text_color=T.MUTED, font=ctk.CTkFont(size=11))
             size_lbl.grid(row=row, column=3, padx=(0, 14), pady=5, sticky="e")
             self._size_labels[sid] = size_lbl
 
@@ -351,21 +353,21 @@ class ProfilesSection(ctk.CTkFrame):
                 row = self._render_detail_row(sid, row)
 
     def _render_detail_row(self, sid, row):
-        detail = ctk.CTkFrame(self._list_card, fg_color=("gray90", "gray17"), corner_radius=6)
+        detail = ctk.CTkFrame(self._list_card, fg_color=T.PANEL, corner_radius=6)
         detail.grid(row=row, column=0, columnspan=6, padx=(30, 14), pady=(0, 6), sticky="ew")
         detail.grid_columnconfigure(0, weight=1)
 
         breakdown = self._breakdown.get(sid)
         if breakdown is None:
             ctk.CTkLabel(detail, text="Click \"Scan Sizes\" to see a category breakdown for this profile.",
-                         text_color="gray", font=ctk.CTkFont(size=11)).grid(
+                         text_color=T.MUTED, font=ctk.CTkFont(size=11)).grid(
                 row=0, column=0, columnspan=3, padx=12, pady=8, sticky="w")
             return row + 1
 
         nonzero = [c for c in breakdown if c[2] > 0]
         if not nonzero:
             ctk.CTkLabel(detail, text="No junk found in any category.",
-                         text_color="gray", font=ctk.CTkFont(size=11)).grid(
+                         text_color=T.MUTED, font=ctk.CTkFont(size=11)).grid(
                 row=0, column=0, columnspan=3, padx=12, pady=8, sticky="w")
             return row + 1
 
@@ -373,7 +375,7 @@ class ProfilesSection(ctk.CTkFrame):
             ctk.CTkLabel(detail, text=label, font=ctk.CTkFont(size=11), anchor="w").grid(
                 row=j, column=0, padx=(12, 6), pady=3, sticky="w")
             ctk.CTkLabel(detail, text=format_size(size), font=ctk.CTkFont(size=11),
-                         text_color="gray").grid(row=j, column=1, padx=(0, 14), pady=3, sticky="e")
+                         text_color=T.MUTED).grid(row=j, column=1, padx=(0, 14), pady=3, sticky="e")
             ctk.CTkButton(detail, text="Clean", width=70, height=24, font=ctk.CTkFont(size=11),
                           command=lambda s=sid, c=cat_id: self._clean_category(s, c)).grid(
                 row=j, column=2, padx=(0, 12), pady=3, sticky="e")

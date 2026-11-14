@@ -1,4 +1,6 @@
 import customtkinter as ctk
+
+from ui import theme as T
 import subprocess
 import threading
 from modules.runner import run_inline_powershell
@@ -170,7 +172,7 @@ class ConfigTab(ctk.CTkFrame):
         desc_frame.grid_columnconfigure(0, weight=1)
         desc_frame.grid_propagate(False)
         self._desc_label = ctk.CTkLabel(desc_frame, text="",
-                                         text_color="gray", font=ctk.CTkFont(size=11),
+                                         text_color=T.MUTED, font=ctk.CTkFont(size=11),
                                          anchor="w", wraplength=900)
         self._desc_label.grid(row=0, column=0, padx=12, pady=8, sticky="w")
 
@@ -201,7 +203,7 @@ class ConfigTab(ctk.CTkFrame):
                        command=self._save_sheets_config).grid(row=0, column=0, padx=(0, 8))
         ctk.CTkButton(btn_row, text="Test Connection", width=140,
                        command=self._test_sheets_connection).grid(row=0, column=1)
-        self._sheets_status = ctk.CTkLabel(btn_row, text="", text_color="gray",
+        self._sheets_status = ctk.CTkLabel(btn_row, text="", text_color=T.MUTED,
                                             font=ctk.CTkFont(size=11))
         self._sheets_status.grid(row=0, column=2, padx=(14, 0))
 
@@ -211,7 +213,7 @@ class ConfigTab(ctk.CTkFrame):
                       font=ctk.CTkFont(size=13, weight="bold"), anchor="w").grid(
             row=3, column=0, columnspan=2, padx=10, pady=(0, 2), sticky="w")
         self._output = ctk.CTkTextbox(wrap, height=130, state="disabled",
-                                       font=ctk.CTkFont(family="Courier New", size=11))
+                                       font=ctk.CTkFont(family=T.MONO_FAMILY, size=11))
         self._output.grid(row=4, column=0, columnspan=2, padx=10, pady=(0, 10), sticky="ew")
 
     # ── Google Sheets helpers ──────────────────────────────────────
@@ -244,7 +246,7 @@ class ConfigTab(ctk.CTkFrame):
 
     def _test_sheets_connection(self):
         self._save_sheets_config()
-        self._sheets_status.configure(text="Testing...", text_color="gray")
+        self._sheets_status.configure(text="Testing...", text_color=T.MUTED)
 
         def task():
             ok, msg = sheets_sync.test_connection()

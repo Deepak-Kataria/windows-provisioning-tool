@@ -1,4 +1,6 @@
 import customtkinter as ctk
+
+from ui import theme as T
 import threading
 import tkinter.messagebox as msgbox
 from modules.runner import run_powershell, run_inline_powershell
@@ -42,7 +44,7 @@ class DiskAnalysisSection(ctk.CTkFrame):
         top_row.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(top_row, text="Drives",
                      font=ctk.CTkFont(size=15, weight="bold")).grid(row=0, column=0, sticky="w")
-        self._refresh_drives_btn = ctk.CTkButton(top_row, text="Refresh", width=90,
+        self._refresh_drives_btn = ctk.CTkButton(top_row, text="Refresh", fg_color="transparent", border_width=1, width=90,
                                                   command=self._load_drives)
         self._refresh_drives_btn.grid(row=0, column=1, sticky="e")
         tip(self._refresh_drives_btn, "Reload drive list and free space")
@@ -62,7 +64,7 @@ class DiskAnalysisSection(ctk.CTkFrame):
         ctk.CTkLabel(folder_hdr,
                      text="Lists immediate subfolders of the current path, largest first. "
                           "Scanning large trees (e.g. C:\\) may take a while.",
-                     font=ctk.CTkFont(size=11), text_color="gray").grid(
+                     font=ctk.CTkFont(size=11), text_color=T.MUTED).grid(
             row=1, column=0, padx=14, pady=(0, 8), sticky="w")
 
         path_row = ctk.CTkFrame(folder_hdr, fg_color="transparent")
@@ -77,9 +79,9 @@ class DiskAnalysisSection(ctk.CTkFrame):
         self._path_entry = ctk.CTkEntry(path_row, placeholder_text="Path")
         self._path_entry.grid(row=0, column=2, padx=(0, 6), sticky="ew")
 
-        tip(ctk.CTkButton(path_row, text="Up", width=50, command=self._go_up),
+        tip(ctk.CTkButton(path_row, text="Up", fg_color="transparent", border_width=1, width=50, command=self._go_up),
             "Go to the parent folder").grid(row=0, column=3, padx=3)
-        tip(ctk.CTkButton(path_row, text="Go", width=50, command=self._go_path),
+        tip(ctk.CTkButton(path_row, text="Go", fg_color="transparent", border_width=1, width=50, command=self._go_path),
             "Open the path typed in the box").grid(row=0, column=4, padx=3)
         self._scan_folder_btn = ctk.CTkButton(path_row, text="Scan This Folder", width=140,
                                               command=self._scan_folder)
@@ -95,7 +97,7 @@ class DiskAnalysisSection(ctk.CTkFrame):
                      font=ctk.CTkFont(size=13, weight="bold"), anchor="w").grid(
             row=4, column=0, padx=10, pady=(12, 2), sticky="w")
         self._output = ctk.CTkTextbox(wrap, height=160, state="disabled",
-                                      font=ctk.CTkFont(family="Courier New", size=11))
+                                      font=ctk.CTkFont(family=T.MONO_FAMILY, size=11))
         self._output.grid(row=5, column=0, padx=10, pady=(0, 10), sticky="ew")
 
     # ── Helpers ────────────────────────────────────────────────────────
@@ -174,7 +176,7 @@ class DiskAnalysisSection(ctk.CTkFrame):
 
         if not self._drives:
             ctk.CTkLabel(self._drives_card, text="No fixed drives found.",
-                         text_color="gray").grid(row=0, column=0, padx=14, pady=14, sticky="w")
+                         text_color=T.MUTED).grid(row=0, column=0, padx=14, pady=14, sticky="w")
             return
 
         for i, d in enumerate(self._drives):
@@ -310,7 +312,7 @@ class DiskAnalysisSection(ctk.CTkFrame):
         self._clear_folder_rows()
         if not results:
             ctk.CTkLabel(self._folder_card, text="No subfolders found.",
-                         text_color="gray").grid(row=0, column=0, padx=14, pady=14, sticky="w")
+                         text_color=T.MUTED).grid(row=0, column=0, padx=14, pady=14, sticky="w")
             return
 
         max_size = max((r[2] for r in results), default=0) or 1
@@ -320,13 +322,13 @@ class DiskAnalysisSection(ctk.CTkFrame):
             row.grid_columnconfigure(0, weight=1)
 
             btn = ctk.CTkButton(row, text=f"  {name}", anchor="w",
-                                fg_color="transparent", hover_color=("#3a3a3a", "#2a2a2a"),
+                                fg_color="transparent", hover_color=T.PANEL_3,
                                 font=ctk.CTkFont(size=12),
                                 command=lambda p=full_path: self._drill_into(p))
             btn.grid(row=0, column=0, sticky="ew")
 
             ctk.CTkLabel(row, text=format_size(size), font=ctk.CTkFont(size=11),
-                         text_color="gray", width=90).grid(row=0, column=1, padx=(6, 14))
+                         text_color=T.MUTED, width=90).grid(row=0, column=1, padx=(6, 14))
 
     def _drill_into(self, path):
         self._current_path = path if path.endswith("\\") else path + "\\"

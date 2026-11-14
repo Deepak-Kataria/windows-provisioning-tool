@@ -1,4 +1,6 @@
 import customtkinter as ctk
+
+from ui import theme as T
 import threading
 from modules.runner import run_powershell
 from modules.logger import log
@@ -40,7 +42,7 @@ class TelemetryTab(ctk.CTkFrame):
                       font=ctk.CTkFont(size=16, weight="bold")).grid(
             row=0, column=0, sticky="w", padx=20, pady=(16, 4))
         ctk.CTkLabel(apply_card, text="Apply registry and service changes to improve privacy.",
-                      text_color="gray", font=ctk.CTkFont(size=12)).grid(
+                      text_color=T.MUTED, font=ctk.CTkFont(size=12)).grid(
             row=1, column=0, sticky="w", padx=20, pady=(0, 10))
 
         options_frame = ctk.CTkFrame(apply_card, fg_color="transparent")
@@ -54,7 +56,7 @@ class TelemetryTab(ctk.CTkFrame):
             row_frame.grid_columnconfigure(1, weight=1)
             ctk.CTkCheckBox(row_frame, text=label, variable=var, width=240).grid(
                 row=0, column=0, sticky="w")
-            ctk.CTkLabel(row_frame, text=desc, text_color="gray",
+            ctk.CTkLabel(row_frame, text=desc, text_color=T.MUTED,
                           font=ctk.CTkFont(size=11)).grid(
                 row=0, column=1, sticky="w", padx=16)
             self.apply_vars[key] = var
@@ -64,10 +66,10 @@ class TelemetryTab(ctk.CTkFrame):
         self.apply_btn = ctk.CTkButton(apply_btn_row, text="Apply Privacy Settings",
                                        command=self._apply)
         self.apply_btn.grid(row=0, column=0, padx=(0, 8))
-        ctk.CTkButton(apply_btn_row, text="Select All", width=90,
+        ctk.CTkButton(apply_btn_row, text="Select All", fg_color="transparent", border_width=1, width=90,
                       command=lambda: [v.set(True) for v in self.apply_vars.values()]).grid(
             row=0, column=1, padx=4)
-        ctk.CTkButton(apply_btn_row, text="Deselect All", width=90,
+        ctk.CTkButton(apply_btn_row, text="Deselect All", fg_color="transparent", border_width=1, width=90,
                       command=lambda: [v.set(False) for v in self.apply_vars.values()]).grid(
             row=0, column=2, padx=4)
 
@@ -90,7 +92,7 @@ class TelemetryTab(ctk.CTkFrame):
                       font=ctk.CTkFont(size=14, weight="bold")).grid(
             row=0, column=0, sticky="w", padx=20, pady=(14, 4))
         ctk.CTkLabel(rollback_card, text="Select individual settings to re-enable.",
-                      text_color="gray", font=ctk.CTkFont(size=12)).grid(
+                      text_color=T.MUTED, font=ctk.CTkFont(size=12)).grid(
             row=1, column=0, sticky="w", padx=20, pady=(0, 8))
 
         rb_options_frame = ctk.CTkFrame(rollback_card, fg_color="transparent")
@@ -109,10 +111,10 @@ class TelemetryTab(ctk.CTkFrame):
                                            fg_color="#FF8F00", hover_color="#E65100",
                                            command=self._rollback)
         self.rollback_btn.grid(row=0, column=0, padx=(0, 8))
-        ctk.CTkButton(rb_btn_row, text="Select All", width=90,
+        ctk.CTkButton(rb_btn_row, text="Select All", fg_color="transparent", border_width=1, width=90,
                        command=lambda: [v.set(True) for v in self.rollback_vars.values()]).grid(
             row=0, column=1, padx=4)
-        ctk.CTkButton(rb_btn_row, text="Deselect All", width=90,
+        ctk.CTkButton(rb_btn_row, text="Deselect All", fg_color="transparent", border_width=1, width=90,
                        command=lambda: [v.set(False) for v in self.rollback_vars.values()]).grid(
             row=0, column=2, padx=4)
 

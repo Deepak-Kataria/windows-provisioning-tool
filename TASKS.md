@@ -41,7 +41,11 @@ Last updated: 2026-11-14
 - `tip()` tooltips on the top bar, Debloat, Tweaks, Cleanup (all 3 sections), Security, Threat Report buttons.
 - Shortcuts: Ctrl+A select all, Ctrl+Shift+A deselect all, Ctrl+Enter main action (apply / clean / scan) on the visible tab; the Cleanup hub forwards to its visible section; ignored while typing in a text field. Tabs opt in via `shortcut_*` methods.
 - Select All / Deselect All already existed on every checkbox tab.
-**Still to do:** undo history per tab, unified results dialog (collapse/expand), last-run + pass/fail badge on tab headers, progress feedback where missing, tooltips on System/Apps/Config/Users tabs, responsive layout.
+**Part 2 done (2026-11-14): "ops console" redesign (shell + theme)**
+- `ui/theme.py`: dark navy palette with cyan accent, Segoe UI + Cascadia Mono/Consolas, CTk theme override applied in `main.py` (no extra file to bundle). Buttons given their own fg_color get light text automatically; secondary actions (Select All/None, Refresh, Scan Sizes, Up/Go) are outline buttons.
+- `ui/dashboard.py`: left sidebar (PROVISION / OPTIMIZE / DEFENSE / ADMIN groups, MDL2 icons, Ctrl+1..9), page header with breadcrumb + subtitle + shortcut hints, live status bar (online, host, IP, OS build, domain, user, elevation, uptime, clock). Opens maximised.
+- All tabs' hardcoded grey panels / `text_color="gray"` switched to theme tokens.
+**Still to do:** per-tab layout polish (stat tiles for Security/Threat risk, denser lists, mono data columns), login screen restyle (login is currently disabled), undo history per tab, unified results dialog (collapse/expand), last-run + pass/fail badge on tab headers, progress feedback where missing, tooltips on System/Apps/Config/Users tabs, responsive layout.
 
 
 ---

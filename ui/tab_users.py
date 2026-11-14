@@ -1,4 +1,6 @@
 import customtkinter as ctk
+
+from ui import theme as T
 from modules.auth import list_users, add_user, delete_user, change_password
 
 
@@ -113,7 +115,7 @@ class UsersTab(ctk.CTkFrame):
         self.selected_username = username
         for uname, (row, btn) in self._row_buttons.items():
             if uname == username:
-                row.configure(fg_color=("#3a3a3a", "#2a2a2a"))
+                row.configure(fg_color=T.PANEL_3)
                 btn.configure(text="Selected", fg_color="#4CAF50", border_width=0)
             else:
                 row.configure(fg_color="transparent")

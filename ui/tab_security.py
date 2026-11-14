@@ -5,6 +5,8 @@ from datetime import datetime
 
 import customtkinter as ctk
 
+from ui import theme as T
+
 from modules import security_checks as sc
 from modules.logger import log, log_change
 from modules.runner import run_encoded_powershell
@@ -20,7 +22,7 @@ _STATUS_COLOR = {"PASS": "#27ae60", "FAIL": "#e74c3c", "WARN": "#e67e22", "UNKNO
 _STATUS_ICON  = {"PASS": "✓", "FAIL": "✗", "WARN": "⚠", "UNKNOWN": "?", "INFO": "i"}
 _LEVEL_COLOR  = {"CLEAN": "#27ae60", "LOW": "#2874a6", "MEDIUM": "#d35400",
                  "HIGH": "#c0392b", "CRITICAL": "#7b241c"}
-_CAT_HDR_BG   = ("gray82", "gray24")
+_CAT_HDR_BG   = T.PANEL_2
 
 _SCAN_WORKERS = 6
 
@@ -44,7 +46,7 @@ class SecurityTab(ctk.CTkFrame):
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
-        top = ctk.CTkFrame(self, height=56, corner_radius=0, fg_color=("gray90", "gray17"))
+        top = ctk.CTkFrame(self, height=56, corner_radius=0, fg_color=T.PANEL)
         top.grid(row=0, column=0, sticky="ew")
         top.grid_columnconfigure(4, weight=1)
         top.grid_propagate(False)
@@ -69,7 +71,7 @@ class SecurityTab(ctk.CTkFrame):
 
         self._status_lbl = ctk.CTkLabel(
             top, text=f"Click 'Run Vulnerability Scan' to start ({len(CHECKS)} checks).",
-            text_color="gray", font=ctk.CTkFont(size=11))
+            text_color=T.MUTED, font=ctk.CTkFont(size=11))
         self._status_lbl.grid(row=0, column=4, padx=12, sticky="w")
 
         self._scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
@@ -78,7 +80,7 @@ class SecurityTab(ctk.CTkFrame):
 
         ctk.CTkLabel(
             self._scroll, text="No scan results yet.\nRun a scan to see the security report.",
-            text_color="gray", font=ctk.CTkFont(size=13), justify="center"
+            text_color=T.MUTED, font=ctk.CTkFont(size=13), justify="center"
         ).grid(row=0, column=0, pady=60)
 
     def _set_busy(self, busy, scan_text=None):
@@ -118,7 +120,7 @@ class SecurityTab(ctk.CTkFrame):
             ctk.CTkLabel(hdr, text=f"  {cat}", font=ctk.CTkFont(size=13, weight="bold"),
                          anchor="w").grid(row=0, column=0, padx=6, sticky="w")
             count_lbl = ctk.CTkLabel(hdr, text="", font=ctk.CTkFont(size=11),
-                                     text_color="gray", anchor="w")
+                                     text_color=T.MUTED, anchor="w")
             count_lbl.grid(row=0, column=1, padx=8, sticky="w")
             fix_all_btn = ctk.CTkButton(
                 hdr, text="Fix All", width=120, height=26,
@@ -163,7 +165,7 @@ class SecurityTab(ctk.CTkFrame):
         ctk.CTkLabel(
             self._summary,
             text=f"{meta['computer']}   |   Scanned {self._scan_time or '-'}   |   {len(CHECKS)} checks",
-            text_color="gray", font=ctk.CTkFont(size=11), anchor="w"
+            text_color=T.MUTED, font=ctk.CTkFont(size=11), anchor="w"
         ).grid(row=1, column=1, sticky="w")
 
         pills = ctk.CTkFrame(self._summary, fg_color="transparent")
@@ -205,7 +207,7 @@ class SecurityTab(ctk.CTkFrame):
             state="normal" if n_fix and not self._running else "disabled")
 
     def _add_result_row(self, parent, check, row_idx):
-        bg = ("gray95", "gray18") if row_idx % 2 == 0 else ("gray90", "gray20")
+        bg = T.PANEL_2 if row_idx % 2 == 0 else T.PANEL_2
         row = ctk.CTkFrame(parent, fg_color=bg, corner_radius=0)
         row.grid(row=row_idx, column=0, sticky="ew")
         row.grid_columnconfigure(2, weight=1)
@@ -231,7 +233,7 @@ class SecurityTab(ctk.CTkFrame):
 
         if check.get("impact"):
             ctk.CTkLabel(row, text=f"If fixed: {check['impact']}",
-                         font=ctk.CTkFont(size=10, slant="italic"), text_color="gray",
+                         font=ctk.CTkFont(size=10, slant="italic"), text_color=T.MUTED,
                          anchor="w", wraplength=400, justify="left"
                          ).grid(row=1, column=2, padx=(0, 12), pady=(0, 8), sticky="w")
 
@@ -254,7 +256,7 @@ class SecurityTab(ctk.CTkFrame):
         w["icon_lbl"].configure(text=f" {_STATUS_ICON.get(status, '?')} ", text_color=color)
         w["name_lbl"].configure(text_color=color)
         w["detail_lbl"].configure(text=detail or check["description"],
-                                  text_color=color if detail else "gray")
+                                  text_color=color if detail else T.MUTED)
 
         for child in w["btn_frame"].winfo_children():
             child.destroy()
@@ -305,10 +307,10 @@ class SecurityTab(ctk.CTkFrame):
         self._copy_btn.configure(state="disabled")
         self._clear_report()
         self._set_busy(True, "Scanning...")
-        self._status_lbl.configure(text="Running checks...", text_color="gray")
+        self._status_lbl.configure(text="Running checks...", text_color=T.MUTED)
 
         prog = ctk.CTkLabel(self._scroll, text=f"Scanning...  0 / {len(CHECKS)}",
-                            text_color="gray", font=ctk.CTkFont(size=13))
+                            text_color=T.MUTED, font=ctk.CTkFont(size=13))
         prog.grid(row=0, column=0, pady=60)
         log("Security: scan started")
 
@@ -375,7 +377,7 @@ class SecurityTab(ctk.CTkFrame):
             threading.Thread(target=run_encoded_powershell, args=(check["fix_ps"],),
                              daemon=True).start()
             self._status_lbl.configure(text=f"{check['fix_label']}: opened for manual review.",
-                                       text_color="gray")
+                                       text_color=T.MUTED)
             return
         self._row_action(check, "fix", "Fixing...")
 
@@ -432,7 +434,7 @@ class SecurityTab(ctk.CTkFrame):
         scroll.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
-            scroll, wraplength=560, justify="left", anchor="w", text_color="gray",
+            scroll, wraplength=560, justify="left", anchor="w", text_color=T.MUTED,
             font=ctk.CTkFont(size=11),
             text="Ticked fixes run one after another and each is re-checked. Fixes that can "
                  "interrupt how people work are unticked — tick them only if you've read the impact."
@@ -440,7 +442,7 @@ class SecurityTab(ctk.CTkFrame):
 
         vars_ = {}
         for i, check in enumerate(candidates, 1):
-            box = ctk.CTkFrame(scroll, fg_color=("gray92", "gray20"))
+            box = ctk.CTkFrame(scroll, fg_color=T.PANEL_2)
             box.grid(row=i, column=0, sticky="ew", pady=3)
             box.grid_columnconfigure(0, weight=1)
             var = ctk.BooleanVar(value=not check["disruptive"])
@@ -452,7 +454,7 @@ class SecurityTab(ctk.CTkFrame):
             note = ("⚠ May interrupt users. " if check["disruptive"] else "") + check.get("impact", "")
             ctk.CTkLabel(box, text=note, wraplength=540, justify="left", anchor="w",
                          font=ctk.CTkFont(size=10, slant="italic"),
-                         text_color="#d35400" if check["disruptive"] else "gray"
+                         text_color="#d35400" if check["disruptive"] else T.MUTED
                          ).grid(row=1, column=0, padx=(38, 10), pady=(0, 8), sticky="w")
 
         btns = ctk.CTkFrame(dlg, fg_color="transparent")
@@ -493,7 +495,7 @@ class SecurityTab(ctk.CTkFrame):
             try:
                 for i, check in enumerate(checks, 1):
                     msg = f"Fix All {cat}: {i} / {len(checks)}  —  {check['name']}"
-                    self.after(0, lambda m=msg: self._status_lbl.configure(text=m, text_color="gray"))
+                    self.after(0, lambda m=msg: self._status_lbl.configure(text=m, text_color=T.MUTED))
                     if self._apply(check, "fix") == "PASS":
                         fixed += 1
                     self.after(0, self._after_result_change, check["id"])
@@ -512,7 +514,7 @@ class SecurityTab(ctk.CTkFrame):
             return
         self.clipboard_clear()
         self.clipboard_append(build_text(self._results, self._fixed))
-        self._status_lbl.configure(text="Report copied to clipboard.", text_color="gray")
+        self._status_lbl.configure(text="Report copied to clipboard.", text_color=T.MUTED)
 
     def _export_report(self):
         if not self._results:
@@ -532,7 +534,7 @@ class SecurityTab(ctk.CTkFrame):
             self._status_lbl.configure(text=f"Export failed: {e}", text_color="#e74c3c")
             return
         log(f"Security report exported: {html_path} / {txt_path}")
-        self._status_lbl.configure(text=f"Report saved: {html_path} (+ .txt)", text_color="gray")
+        self._status_lbl.configure(text=f"Report saved: {html_path} (+ .txt)", text_color=T.MUTED)
         try:
             os.startfile(html_path)
         except OSError:
