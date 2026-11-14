@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 import os
 import bcrypt
@@ -66,7 +67,8 @@ def add_user(username: str, password: str, role: str, display_name: str):
         "username": username,
         "password_hash": hashed,
         "role": role,
-        "display_name": display_name
+        "display_name": display_name,
+        "created": datetime.now().strftime("%Y-%m-%d"),
     })
     save_credentials(data)
 
@@ -83,7 +85,8 @@ def change_password(username: str, new_password: str):
 
 def list_users():
     data = load_credentials()
-    return [{"username": u["username"], "role": u["role"], "display_name": u["display_name"]}
+    return [{"username": u["username"], "role": u["role"], "display_name": u["display_name"],
+             "created": u.get("created", "")}
             for u in data["users"]]
 
 

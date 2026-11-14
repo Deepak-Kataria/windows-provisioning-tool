@@ -18,6 +18,7 @@ import customtkinter as ctk
 
 from modules import security_checks as sc
 from modules import threat_report as tr
+from modules.appx import installed_appx_names
 from modules.logger import CHANGES_LOG, log
 from modules.runner import run_encoded_powershell
 from ui import theme as T
@@ -32,11 +33,6 @@ Get-CimInstance Win32_UserProfile | Where-Object { -not $_.Special } | ForEach-O
     $t = if ($_.LastUseTime) { $_.LastUseTime.ToString('s') } else { '' }
     "$($_.LocalPath)|$t|$($_.Loaded)"
 }
-"""
-
-_APPX_PS = r"""
-try { Get-AppxPackage -AllUsers -ErrorAction Stop | Select-Object -ExpandProperty Name -Unique }
-catch { Get-AppxPackage | Select-Object -ExpandProperty Name -Unique }
 """
 
 _REBOOT_KEYS = [
@@ -371,8 +367,7 @@ class HomeTab(ctk.CTkFrame):
     def _gather_slow(self):
         bloat = profiles = None
         try:
-            _, out = run_encoded_powershell(_APPX_PS, timeout=60)
-            installed = {l.strip() for l in out.splitlines() if l.strip()}
+            installed = installed_appx_names()
             bloat = sorted(name for pkg, name in self._bloat_list.items() if pkg in installed)
         except Exception as e:
             log(f"Home: bloatware check failed: {e}", "warning")
