@@ -1,14 +1,29 @@
-import customtkinter as ctk
+"""Tweaks: system tweaks, preferences and power plans.
 
-from ui import theme as T
+Each tweak shows whether it's already applied (read from the registry where possible).
+"""
 import json
 import os
 import threading
-from modules.runner import run_inline_powershell
+
+import customtkinter as ctk
+
 from modules.logger import log
-from ui.widgets import confirm_run, tip
+from modules.reg_state import active_power_plan, pref_on, tweak_applied
+from modules.runner import run_inline_powershell
+from ui import theme as T
+from ui.widgets import ActionBar, confirm_run, section_header, tile_row, tip
 
 CONFIG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config")
+
+# (config key, header, accent, caution?)
+SECTIONS = [
+    ("essential", "Essential tweaks", None, False),
+    ("advanced", "Advanced tweaks", "WARN", True),
+    ("privacy", "Privacy & tracking", None, False),
+    ("org", "Org settings", None, False),
+]
+ULTIMATE = "Ultimate Performance"
 
 
 class TweaksTab(ctk.CTkFrame):
@@ -17,12 +32,17 @@ class TweaksTab(ctk.CTkFrame):
         self.role = role
         self._running = False
         self._tweak_vars = {}     # id -> BooleanVar (checkboxes)
-        self._pref_vars = {}      # id -> BooleanVar (toggles)
-        self._pref_data = {}      # id -> pref dict
         self._tweak_data = {}     # id -> tweak dict
+        self._status = {}         # id -> True / False / None (applied?)
+        self._status_lbls = {}    # id -> status label
+        self._pref_vars = {}      # id -> BooleanVar (switches)
+        self._pref_data = {}      # id -> pref dict
+        self._pref_lbls = {}      # id -> ON/OFF label
+        self._plan = None
         self._load_config()
+        self._advanced = {t["id"] for t in self._config.get("advanced", [])}
         self._build()
-        self._load_pref_states()
+        self._refresh_state()
 
     def _load_config(self):
         with open(os.path.join(CONFIG_DIR, "tweaks.json"), encoding="utf-8") as f:
@@ -31,108 +51,217 @@ class TweaksTab(ctk.CTkFrame):
     # ── Build ──────────────────────────────────────────────────────
 
     def _build(self):
-        self.grid_rowconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=0)
-        self.grid_rowconfigure(2, weight=0)
-        self.grid_columnconfigure(0, weight=6)
-        self.grid_columnconfigure(1, weight=4)
+        self.grid_columnconfigure(0, weight=3)
+        self.grid_columnconfigure(1, weight=2)
+        self.grid_rowconfigure(1, weight=1)
 
-        # ── Left: Tweaks ───────────────────────────────────────────
-        left = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        left.grid(row=0, column=0, padx=(12, 4), pady=(12, 4), sticky="nsew")
+        tiles_host = ctk.CTkFrame(self, fg_color="transparent")
+        tiles_host.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+        tiles_host.grid_columnconfigure(0, weight=1)
+        row, self._tiles = tile_row(tiles_host, [
+            ("Applied", "…", T.MUTED, "reading this PC…"),
+            ("Selected", "0", T.ACCENT, "will be applied"),
+            ("Preferences on", "…", T.INFO, "switches apply instantly"),
+            ("Power plan", "…", T.TEXT, ""),
+        ])
+        row.grid(row=0, column=0, sticky="ew")
+
+        # Left: tweaks
+        left = ctk.CTkScrollableFrame(self, fg_color="transparent", corner_radius=0)
+        left.grid(row=1, column=0, sticky="nsew", padx=(0, 6))
         left.grid_columnconfigure(0, weight=1)
+        r = 0
+        self._section_counts = {}
+        for key, title, accent, caution in SECTIONS:
+            tweaks = self._config.get(key, [])
+            if not tweaks:
+                continue
+            color = getattr(T, accent) if accent else None
+            hdr, col = section_header(left, title, height=30, accent=color)
+            hdr.grid(row=r, column=0, sticky="ew", pady=(10 if r else 0, 0))
+            cnt = ctk.CTkLabel(hdr, text="", font=T.mono(10), text_color=color or T.MUTED)
+            cnt.grid(row=0, column=col, padx=4, sticky="w")
+            self._section_counts[key] = cnt
+            tick = T.outline_button(hdr, text="tick all", width=64, height=20, font=T.mono(10),
+                                    command=lambda k=key: self._tick_section(k))
+            tick.grid(row=0, column=col + 1, padx=8)
+            tip(tick, f"Tick or untick every {title.lower()} tweak")
+            r += 1
+            box = ctk.CTkFrame(left, fg_color=T.PANEL, corner_radius=0)
+            box.grid(row=r, column=0, sticky="ew")
+            box.grid_columnconfigure(0, weight=1)
+            for i, tweak in enumerate(tweaks):
+                self._add_tweak_row(box, tweak, i, caution)
+            r += 1
 
-        # Essential
-        self._section_label(left, "Essential Tweaks", 0)
-        row = 1
-        for tweak in self._config["essential"]:
-            row = self._add_tweak_row(left, tweak, row)
-
-        # Advanced
-        self._section_label(left, "Advanced Tweaks  —  CAUTION", row, color=T.WARN)
-        row += 1
-        for tweak in self._config["advanced"]:
-            row = self._add_tweak_row(left, tweak, row)
-
-        # Privacy
-        self._section_label(left, "Privacy & Tracking", row, color="#CE93D8")
-        row += 1
-        for tweak in self._config.get("privacy", []):
-            row = self._add_tweak_row(left, tweak, row)
-
-        # Org Settings
-        self._section_label(left, "Org Settings", row, color=T.ACCENT)
-        row += 1
-        for tweak in self._config.get("org", []):
-            row = self._add_tweak_row(left, tweak, row)
-
-        # Select All / None buttons
-        btn_row = ctk.CTkFrame(left, fg_color="transparent")
-        btn_row.grid(row=row, column=0, sticky="w", padx=8, pady=(10, 4))
-        tip(ctk.CTkButton(btn_row, text="Select All", fg_color="transparent", border_width=1, width=100,
-                          command=self.shortcut_select_all),
-            "Tick every tweak, including Advanced ones (Ctrl+A)").grid(row=0, column=0, padx=(0, 6))
-        tip(ctk.CTkButton(btn_row, text="Deselect All", fg_color="transparent", border_width=1, width=100,
-                          command=self.shortcut_deselect_all),
-            "Untick every tweak (Ctrl+Shift+A)").grid(row=0, column=1)
-
-        # ── Right: Preferences + Performance ──────────────────────
-        right = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        right.grid(row=0, column=1, padx=(4, 12), pady=(12, 4), sticky="nsew")
+        # Right: preferences + power plan
+        right = ctk.CTkScrollableFrame(self, fg_color="transparent", corner_radius=0)
+        right.grid(row=1, column=1, sticky="nsew", padx=(6, 0))
         right.grid_columnconfigure(0, weight=1)
+        hdr, col = section_header(right, "Preferences", height=30)
+        hdr.grid(row=0, column=0, sticky="ew")
+        ctk.CTkLabel(hdr, text="apply instantly", font=T.mono(10), text_color=T.MUTED).grid(
+            row=0, column=col, padx=4, sticky="w")
+        pbox = ctk.CTkFrame(right, fg_color=T.PANEL, corner_radius=0)
+        pbox.grid(row=1, column=0, sticky="ew")
+        pbox.grid_columnconfigure(0, weight=1)
+        for i, pref in enumerate(self._config.get("preferences", [])):
+            self._add_pref_row(pbox, pref, i)
 
-        self._section_label(right, "Customize Preferences", 0)
-        prow = 1
-        for pref in self._config["preferences"]:
-            prow = self._add_pref_row(right, pref, prow)
+        hdr, _ = section_header(right, "Power plan", height=30)
+        hdr.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+        plan = ctk.CTkFrame(right, fg_color=T.PANEL, corner_radius=0)
+        plan.grid(row=3, column=0, sticky="ew")
+        plan.grid_columnconfigure(1, weight=1)
+        self._plan_btn = ctk.CTkSegmentedButton(plan, values=["Balanced", ULTIMATE],
+                                                command=self._choose_plan)
+        self._plan_btn.grid(row=0, column=0, padx=12, pady=10, sticky="w")
+        tip(self._plan_btn, "Balanced is the Windows default. Ultimate Performance uses more "
+                            "power; best for desktops.")
+        self._plan_lbl = ctk.CTkLabel(plan, text="", font=T.mono(10), text_color=T.MUTED)
+        self._plan_lbl.grid(row=0, column=1, padx=12, sticky="e")
 
-        self._section_label(right, "Performance Plans", prow, color=T.ACCENT)
-        prow += 1
-        perf = self._config["performance"]
+        # Bottom action bar
+        self._action = ActionBar(self)
+        self._action.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        self._action.button("Select all", self.shortcut_select_all, outline=True, width=96,
+                            tip_text="Tick every tweak, including Advanced ones (Ctrl+A)")
+        self._action.button("Select none", self.shortcut_deselect_all, outline=True, width=96,
+                            tip_text="Untick every tweak (Ctrl+Shift+A)")
+        self._undo_btn = self._action.button("Undo selected", self._undo_tweaks, outline=True,
+                                             width=120, text_color=T.WARN, border_color=T.WARN,
+                                             tip_text="Revert the ticked tweaks to Windows defaults")
+        self._apply_btn = self._action.button("Apply", self._apply_tweaks, width=150,
+                                              tip_text="Apply the ticked tweaks (Ctrl+Enter). "
+                                                       "You'll see the list before anything runs.")
+        self._update_summary()
 
-        tip(ctk.CTkButton(right, text="Enable Ultimate Performance",
-                          fg_color="#2e7d32", hover_color="#1b5e20",
-                          command=lambda: self._run_perf(perf["enable_cmd"], "Enable Ultimate Performance")),
-            "Add and activate the Ultimate Performance power plan "
-            "(higher power use, best for desktops)").grid(
-            row=prow, column=0, padx=12, pady=(6, 3), sticky="ew")
-        prow += 1
-        tip(ctk.CTkButton(right, text="Disable / Use Balanced Plan",
-                          fg_color=T.PANEL_3, hover_color=T.BORDER,
-                          command=lambda: self._run_perf(perf["disable_cmd"], "Set Balanced Plan")),
-            "Switch back to the Windows Balanced power plan").grid(
-            row=prow, column=0, padx=12, pady=(3, 8), sticky="ew")
+    def _add_tweak_row(self, parent, tweak, i, caution):
+        tid = tweak["id"]
+        var = ctk.BooleanVar(value=False)
+        var.trace_add("write", lambda *_: self._update_summary())
+        self._tweak_vars[tid] = var
+        self._tweak_data[tid] = tweak
 
-        # ── Bottom: Description ────────────────────────────────────
-        desc_frame = ctk.CTkFrame(self, height=56)
-        desc_frame.grid(row=1, column=0, columnspan=2, padx=12, pady=(0, 4), sticky="ew")
-        desc_frame.grid_columnconfigure(0, weight=1)
-        desc_frame.grid_propagate(False)
-        self._desc_label = ctk.CTkLabel(
-            desc_frame, text="Hover over any tweak to see its description.",
-            text_color=T.MUTED, font=ctk.CTkFont(size=11), anchor="w", wraplength=900)
-        self._desc_label.grid(row=0, column=0, padx=12, pady=8, sticky="w")
+        row = ctk.CTkFrame(parent, fg_color=T.PANEL if i % 2 == 0 else T.PANEL_2, corner_radius=0)
+        row.grid(row=i, column=0, sticky="ew")
+        row.grid_columnconfigure(1, weight=1)
+        ctk.CTkCheckBox(row, text="", variable=var, width=20, checkbox_width=16,
+                        checkbox_height=16).grid(row=0, column=0, rowspan=2, padx=(10, 6), pady=6, sticky="n")
+        name = ctk.CTkFrame(row, fg_color="transparent")
+        name.grid(row=0, column=1, sticky="w", pady=(5, 0))
+        ctk.CTkLabel(name, text=tweak["name"], font=T.ui(12, "bold"), text_color=T.TEXT_BRIGHT,
+                     height=18).grid(row=0, column=0, sticky="w")
+        if caution:
+            ctk.CTkLabel(name, text=" CAUTION ", font=T.mono(8, "bold"), text_color=T.WARN,
+                         fg_color=T.PANEL_3, corner_radius=2, height=14).grid(row=0, column=1, padx=6)
+        ctk.CTkLabel(row, text=tweak.get("description", ""), font=T.ui(11), text_color=T.MUTED,
+                     anchor="w", justify="left", wraplength=560, height=16).grid(
+            row=1, column=1, sticky="w", pady=(0, 6))
+        lbl = ctk.CTkLabel(row, text="…", font=T.mono(9, "bold"), text_color=T.DIM, width=70)
+        lbl.grid(row=0, column=2, rowspan=2, padx=(6, 12))
+        self._status_lbls[tid] = lbl
 
-        # ── Bottom: Buttons ────────────────────────────────────────
-        action_frame = ctk.CTkFrame(self, fg_color="transparent")
-        action_frame.grid(row=2, column=0, columnspan=2, padx=12, pady=(0, 12), sticky="ew")
-        action_frame.grid_columnconfigure(2, weight=1)
+    def _add_pref_row(self, parent, pref, i):
+        pid = pref["id"]
+        var = ctk.BooleanVar(value=False)
+        self._pref_vars[pid] = var
+        self._pref_data[pid] = pref
+        row = ctk.CTkFrame(parent, fg_color=T.PANEL if i % 2 == 0 else T.PANEL_2, corner_radius=0,
+                           height=34)
+        row.grid(row=i, column=0, sticky="ew")
+        row.grid_propagate(False)
+        row.grid_rowconfigure(0, weight=1)
+        row.grid_columnconfigure(0, weight=1)
+        name = ctk.CTkLabel(row, text=pref["name"], font=T.ui(12), anchor="w")
+        name.grid(row=0, column=0, sticky="w", padx=12)
+        tip(name, pref.get("description", ""))
+        lbl = ctk.CTkLabel(row, text="", font=T.mono(10, "bold"), width=34, text_color=T.DIM)
+        lbl.grid(row=0, column=1)
+        self._pref_lbls[pid] = lbl
+        sw = ctk.CTkSwitch(row, text="", variable=var, width=44, switch_width=34, switch_height=16,
+                           command=lambda p=pref, v=var: self._apply_pref(p, v.get()))
+        sw.grid(row=0, column=2, padx=(4, 10))
+        tip(sw, pref.get("description", ""))
 
-        self._apply_btn = ctk.CTkButton(action_frame, text="Apply Selected Tweaks",
-                                         width=180, command=self._apply_tweaks)
-        self._apply_btn.grid(row=0, column=0, padx=(0, 8))
-        tip(self._apply_btn, "Apply the ticked tweaks (Ctrl+Enter). "
-                             "You'll see the list before anything runs.")
+    # ── State ──────────────────────────────────────────────────────
 
-        self._undo_btn = ctk.CTkButton(action_frame, text="Undo Selected Tweaks",
-                                        width=180, fg_color="#FF8F00", hover_color="#E65100",
-                                        command=self._undo_tweaks)
-        self._undo_btn.grid(row=0, column=1)
-        tip(self._undo_btn, "Revert the ticked tweaks to Windows defaults")
+    def on_show(self):
+        if not self._running:
+            self._refresh_state()
 
-        self._status_label = ctk.CTkLabel(action_frame, text="",
-                                           font=ctk.CTkFont(size=11), text_color=T.MUTED, anchor="w")
-        self._status_label.grid(row=0, column=3, padx=16, sticky="w")
+    def _refresh_state(self):
+        """Read tweak / preference / power plan state off the UI thread (fast: registry only)."""
+        def task():
+            status = {tid: tweak_applied(t) for tid, t in self._tweak_data.items()}
+            prefs = {pid: pref_on(p) for pid, p in self._pref_data.items()}
+            plan = active_power_plan()
+            try:
+                self.after(0, self._apply_state, status, prefs, plan)
+            except RuntimeError:
+                pass
+        threading.Thread(target=task, daemon=True).start()
+
+    def _apply_state(self, status, prefs, plan):
+        if not self.winfo_exists():
+            return
+        self._status, self._plan = status, plan
+        for tid, st in status.items():
+            text, color = ("APPLIED", T.OK) if st else ("NOT SET", T.DIM) if st is False else ("—", T.DIM)
+            self._status_lbls[tid].configure(text=text, text_color=color)
+        for key, _, _, _ in SECTIONS:
+            if key in self._section_counts:
+                ids = [t["id"] for t in self._config.get(key, [])]
+                known = [i for i in ids if status.get(i) is not None]
+                n = sum(1 for i in known if status[i])
+                self._section_counts[key].configure(
+                    text=f"{len(ids)} · {n} applied" if known else f"{len(ids)}")
+        for pid, on in prefs.items():
+            if on is not None:
+                self._pref_vars[pid].set(on)
+            self._pref_lbls[pid].configure(text="ON" if on else "OFF" if on is False else "—",
+                                           text_color=T.OK if on else T.MUTED)
+        self._plan_btn.set(ULTIMATE if plan and "ultimate" in plan.lower() else
+                           "Balanced" if plan and "balanced" in plan.lower() else "")
+        self._plan_lbl.configure(text=f"active: {plan}" if plan else "active plan unknown")
+        self._update_summary()
+
+    def _update_summary(self):
+        if not hasattr(self, "_apply_btn"):
+            return
+        known = [s for s in self._status.values() if s is not None]
+        n_app = sum(1 for s in known if s)
+        if self._status:
+            self._tiles["Applied"].set(f"{n_app} / {len(known)}", T.OK if n_app else T.MUTED,
+                                       f"in place · {len(self._tweak_data) - len(known)} not checkable")
+        n_on = sum(1 for v in self._pref_vars.values() if v.get())
+        self._tiles["Preferences on"].set(f"{n_on} / {len(self._pref_vars)}", T.INFO,
+                                          "switches apply instantly")
+        plan = self._plan or "unknown"
+        self._tiles["Power plan"].set(plan if len(plan) <= 14 else plan[:13] + "…",
+                                      T.WARN if "ultimate" in plan.lower() else T.TEXT,
+                                      "max performance" if "ultimate" in plan.lower() else "active scheme")
+        sel = [tid for tid, v in self._tweak_vars.items() if v.get()]
+        already = sum(1 for tid in sel if self._status.get(tid))
+        adv = sum(1 for tid in sel if tid in self._advanced)
+        self._tiles["Selected"].set(len(sel), T.WARN if adv else T.ACCENT,
+                                    f"{adv} advanced" if adv else "will be applied")
+        if self._running:
+            return
+        noun = "tweak" if len(sel) == 1 else "tweaks"
+        self._apply_btn.configure(text=f"Apply {len(sel)} {noun}", state="normal" if sel else "disabled")
+        self._undo_btn.configure(state="normal" if sel else "disabled")
+        if sel:
+            extra = f" · {already} already applied" if already else ""
+            self._action.set_summary(f"{len(sel)} {noun} selected{extra}")
+        else:
+            self._action.set_summary("Tick the tweaks to apply or undo")
+
+    def _tick_section(self, key):
+        ids = [t["id"] for t in self._config.get(key, [])]
+        new = not all(self._tweak_vars[i].get() for i in ids)
+        for i in ids:
+            self._tweak_vars[i].set(new)
 
     # Keyboard shortcuts (see ui/widgets.py)
     def shortcut_select_all(self):
@@ -146,112 +275,95 @@ class TweaksTab(ctk.CTkFrame):
     def shortcut_apply(self):
         self._apply_tweaks()
 
-    def _section_label(self, parent, text, row, color="white"):
-        ctk.CTkLabel(parent, text=text,
-                      font=ctk.CTkFont(size=13, weight="bold"),
-                      text_color=color, anchor="w").grid(
-            row=row, column=0, sticky="w", padx=8, pady=(12, 4))
-        return row + 1
+    def _set_status(self, text, color=None):
+        self._action.set_summary(text, color)
 
-    def _add_tweak_row(self, parent, tweak, row):
-        var = ctk.BooleanVar(value=False)
-        self._tweak_vars[tweak["id"]] = var
-        self._tweak_data[tweak["id"]] = tweak
-
-        cb = ctk.CTkCheckBox(parent, text=tweak["name"], variable=var,
-                              font=ctk.CTkFont(size=12))
-        cb.grid(row=row, column=0, sticky="w", padx=16, pady=2)
-
-        desc = tweak["description"]
-        cb.bind("<Enter>", lambda e, d=desc: self._desc_label.configure(text=d))
-        cb.bind("<Leave>", lambda e: self._desc_label.configure(
-            text="Hover over any tweak to see its description."))
-        return row + 1
-
-    def _add_pref_row(self, parent, pref, row):
-        var = ctk.BooleanVar(value=False)
-        self._pref_vars[pref["id"]] = var
-        self._pref_data[pref["id"]] = pref
-
-        row_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        row_frame.grid(row=row, column=0, sticky="ew", padx=8, pady=2)
-        row_frame.grid_columnconfigure(1, weight=1)
-
-        toggle = ctk.CTkSwitch(row_frame, text=pref["name"], variable=var,
-                                font=ctk.CTkFont(size=12),
-                                command=lambda p=pref, v=var: self._apply_pref(p, v.get()))
-        toggle.grid(row=0, column=0, columnspan=2, sticky="w")
-
-        desc = pref["description"]
-        toggle.bind("<Enter>", lambda e, d=desc: self._desc_label.configure(text=d))
-        toggle.bind("<Leave>", lambda e: self._desc_label.configure(
-            text="Hover over any tweak to see its description."))
-        return row + 1
-
-    # ── Preference state loading ───────────────────────────────────
-
-    def _load_pref_states(self):
-        def task():
-            for pid, pref in self._pref_data.items():
-                try:
-                    cmd = f"(Get-ItemProperty -Path '{pref['reg_path']}' -Name '{pref['reg_name']}' -ErrorAction SilentlyContinue).'{pref['reg_name']}'"
-                    rc, out = run_inline_powershell(cmd)
-                    val = out.strip()
-                    if val.lstrip('-').isdigit():
-                        is_on = int(val) == pref["on_value"]
-                        self.after(0, lambda v=self._pref_vars[pid], s=is_on: v.set(s))
-                except Exception:
-                    pass
-        threading.Thread(target=task, daemon=True).start()
-
-    # ── Preference toggle apply ────────────────────────────────────
+    # ── Preferences / power plan ───────────────────────────────────
 
     def _apply_pref(self, pref, is_on):
         value = pref["on_value"] if is_on else pref["off_value"]
-        cmd = f"If (!(Test-Path '{pref['reg_path']}')) {{ New-Item -Path '{pref['reg_path']}' -Force | Out-Null }}; Set-ItemProperty -Path '{pref['reg_path']}' -Name '{pref['reg_name']}' -Value {value} -Force"
+        cmd = (f"If (!(Test-Path '{pref['reg_path']}')) {{ New-Item -Path '{pref['reg_path']}' -Force | Out-Null }}; "
+               f"Set-ItemProperty -Path '{pref['reg_path']}' -Name '{pref['reg_name']}' -Value {value} -Force")
+        self._pref_lbls[pref["id"]].configure(text="ON" if is_on else "OFF",
+                                              text_color=T.OK if is_on else T.MUTED)
+        self._update_summary()
 
         def task():
             rc, out = run_inline_powershell(cmd)
             state = "ON" if is_on else "OFF"
             if rc == 0:
                 log(f"Pref {pref['name']} → {state}", "success")
-                self.after(0, lambda: self._status_label.configure(
-                    text=f"{pref['name']} set {state}"))
+                self.after(0, self._set_status, f"{pref['name']} set {state}", T.OK)
             else:
                 log(f"Pref {pref['name']} failed: {out}", "error")
-                self.after(0, lambda: self._status_label.configure(
-                    text=f"Failed: {pref['name']}"))
+                self.after(0, self._set_status, f"Failed: {pref['name']}", T.FAIL)
+                self.after(0, self._refresh_state)
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _choose_plan(self, value):
+        perf = self._config["performance"]
+        if value == ULTIMATE:
+            self._run_perf(perf["enable_cmd"], "Enable Ultimate Performance")
+        else:
+            self._run_perf(perf["disable_cmd"], "Set Balanced plan")
+
+    def _run_perf(self, cmd, label):
+        if self._running:
+            return
+        self._running = True
+        self._apply_btn.configure(state="disabled")
+        self._undo_btn.configure(state="disabled")
+        self._plan_btn.configure(state="disabled")
+        self._set_status(f"Running: {label}…", T.TEXT)
+        log(f"Performance: {label}")
+
+        def task():
+            rc, out = run_inline_powershell(cmd)
+
+            def finish():
+                self._running = False
+                self._plan_btn.configure(state="normal")
+                if rc == 0:
+                    log(f"Performance OK: {label}", "success")
+                else:
+                    log(f"Performance FAIL: {label} — {out}", "error")
+                self._refresh_state()
+                self.after(300, lambda: self._set_status(
+                    f"Done: {label}" if rc == 0 else f"Failed: {label} (exit {rc})",
+                    T.OK if rc == 0 else T.FAIL))
+            self.after(0, finish)
 
         threading.Thread(target=task, daemon=True).start()
 
     # ── Tweak apply / undo ─────────────────────────────────────────
 
+    def _selected(self):
+        return [(tid, self._tweak_data[tid]) for tid, var in self._tweak_vars.items() if var.get()]
+
     def _apply_tweaks(self):
-        selected = [(tid, self._tweak_data[tid]) for tid, var in self._tweak_vars.items()
-                    if var.get()]
+        selected = self._selected()
         if not selected:
-            self._status_label.configure(text="No tweaks selected.")
+            self._set_status("No tweaks selected.", T.WARN)
             return
         self._run_tweaks(selected, mode="apply")
 
     def _undo_tweaks(self):
-        selected = [(tid, self._tweak_data[tid]) for tid, var in self._tweak_vars.items()
-                    if var.get()]
+        selected = self._selected()
         if not selected:
-            self._status_label.configure(text="No tweaks selected.")
+            self._set_status("No tweaks selected.", T.WARN)
             return
         self._run_tweaks(selected, mode="undo")
 
     def _run_tweaks(self, selected, mode):
         if self._running:
             return
-        advanced = {t["id"] for t in self._config["advanced"]}
-        has_adv = any(tid in advanced for tid, _ in selected)
+        has_adv = any(tid in self._advanced for tid, _ in selected)
         verb = "applied" if mode == "apply" else "reverted"
         if not confirm_run(
                 self, "Apply tweaks?" if mode == "apply" else "Undo tweaks?",
                 f"These {len(selected)} tweak(s) will be {verb}:",
-                [(t["name"] + ("  (Advanced)" if tid in advanced else ""), tid in advanced)
+                [(t["name"] + ("  (Advanced)" if tid in self._advanced else ""), tid in self._advanced)
                  for tid, t in selected],
                 action_text=f"{'Apply' if mode == 'apply' else 'Undo'} {len(selected)} tweak(s)",
                 danger=has_adv,
@@ -262,31 +374,29 @@ class TweaksTab(ctk.CTkFrame):
         self._apply_btn.configure(state="disabled")
         self._undo_btn.configure(state="disabled")
         total = len(selected)
-        self._status_label.configure(text=f"Running {total} tweak(s)...")
+        self._action.progress(0, f"Running {total} tweak(s)…")
         log(f"Tweaks: {mode} {total} items")
 
         def task():
-            results = []  # list of (name, ok, error_msg)
+            results = []    # (name, ok, error_msg, cmd)
             log_lines = []  # full log for the dialog
-            for tid, tweak in selected:
+            for n, (tid, tweak) in enumerate(selected, 1):
+                self.after(0, self._action.progress, (n - 1) / total, f"{n} / {total}  {tweak['name']}")
                 cmd = tweak.get("apply") if mode == "apply" else tweak.get("undo")
                 log_lines.append(f"\n>>> {tweak['name']}")
                 if not cmd:
                     results.append((tweak["name"], None, "No undo command defined", ""))
                     log_lines.append("  [SKIP] No undo command defined.")
                     continue
-
                 rc, out = run_inline_powershell(cmd)
-                if out.strip():
-                    for line in out.strip().splitlines():
-                        log_lines.append(f"  {line}")
+                for line in out.strip().splitlines():
+                    log_lines.append(f"  {line}")
                 if rc == 0:
                     results.append((tweak["name"], True, "", ""))
-                    log_lines.append(f"  [OK]")
+                    log_lines.append("  [OK]")
                     log(f"Tweak OK: {tweak['name']}", "success")
                 else:
-                    err_msg = out.strip() or f"exit code {rc}"
-                    results.append((tweak["name"], False, err_msg, cmd))
+                    results.append((tweak["name"], False, out.strip() or f"exit code {rc}", cmd))
                     log_lines.append(f"  [FAILED] exit {rc}")
                     log(f"Tweak FAIL: {tweak['name']} — {out}", "error")
 
@@ -295,42 +405,12 @@ class TweaksTab(ctk.CTkFrame):
 
             def finish():
                 self._running = False
-                self._apply_btn.configure(state="normal")
-                self._undo_btn.configure(state="normal")
-                if failed:
-                    self._status_label.configure(
-                        text=f"Done: {succeeded} ok, {failed} failed — see details")
-                else:
-                    self._status_label.configure(
-                        text=f"Done: {succeeded} tweak(s) applied successfully.")
+                self._action.progress(None)
+                self._refresh_state()
+                self.after(300, lambda: self._set_status(
+                    f"Done: {succeeded} ok, {failed} failed (see details)" if failed
+                    else f"Done: {succeeded} tweak(s) {verb}.", T.WARN if failed else T.OK))
                 self._show_done(results, mode, "\n".join(log_lines))
-
-            self.after(0, finish)
-
-        threading.Thread(target=task, daemon=True).start()
-
-    def _run_perf(self, cmd, label):
-        if self._running:
-            return
-        self._running = True
-        self._apply_btn.configure(state="disabled")
-        self._undo_btn.configure(state="disabled")
-        self._status_label.configure(text=f"Running: {label}...")
-        log(f"Performance: {label}")
-
-        def task():
-            rc, out = run_inline_powershell(cmd)
-
-            def finish():
-                self._running = False
-                self._apply_btn.configure(state="normal")
-                self._undo_btn.configure(state="normal")
-                if rc == 0:
-                    self._status_label.configure(text=f"Done: {label}")
-                    log(f"Performance OK: {label}", "success")
-                else:
-                    self._status_label.configure(text=f"Failed: {label} (exit {rc})")
-                    log(f"Performance FAIL: {label} — {out}", "error")
 
             self.after(0, finish)
 
@@ -347,7 +427,8 @@ class TweaksTab(ctk.CTkFrame):
         dialog.title("Tweaks Complete")
         dialog.geometry("620x600")
         dialog.resizable(True, True)
-        dialog.grab_set()
+        dialog.transient(self.winfo_toplevel())
+        dialog.after(60, lambda: dialog.winfo_exists() and dialog.grab_set())
         dialog.lift()
         dialog.focus_force()
         dialog.grid_rowconfigure(1, weight=2)
@@ -429,5 +510,5 @@ class TweaksTab(ctk.CTkFrame):
 
         ctk.CTkButton(close_row, text="Close", width=100,
                       command=dialog.destroy).grid(row=0, column=0, padx=6)
-        ctk.CTkButton(close_row, text="Copy Results", width=110, fg_color="transparent", border_width=1,
-                      command=_copy_results).grid(row=0, column=1, padx=6)
+        T.outline_button(close_row, text="Copy results", width=110,
+                         command=_copy_results).grid(row=0, column=1, padx=6)
