@@ -14,6 +14,7 @@ from ui.tab_apps import AppsTab
 from ui.tab_cleanup import CleanupTab
 from ui.tab_config import ConfigTab
 from ui.tab_debloat import DebloatTab
+from ui.tab_home import HomeTab
 from ui.tab_security import SecurityTab
 from ui.tab_system import SystemTab
 from ui.tab_threat import ThreatTab
@@ -23,8 +24,12 @@ from ui.widgets import bind_root, install_shortcuts, tip
 
 APP_VERSION = "v1.3.0"
 
-# (group, [(page name, class, subtitle)]) — order here is sidebar order and Ctrl+N order
+# (group, [(page name, class, subtitle)]) — order here is sidebar order and Ctrl+N order.
+# Home is Ctrl+0; the pages after it are Ctrl+1..9 in this order.
 NAV = [
+    ("OVERVIEW", [
+        ("Home", HomeTab, "Everything about this machine at a glance"),
+    ]),
     ("PROVISION", [
         ("System", SystemTab, "Hardware info, rename computer, domain join"),
         ("Apps", AppsTab, "Install standard and team software"),
@@ -45,6 +50,7 @@ NAV = [
 ]
 
 USER_PAGES = {"Apps"}   # pages a non-admin may see
+HOME = "Home"
 
 SIDEBAR_W = 216
 
@@ -201,6 +207,8 @@ class Dashboard(ctk.CTkFrame):
                 page.grid_columnconfigure(0, weight=1)
                 widget = cls(page, self.role)
                 widget.grid(row=0, column=0, sticky="nsew")
+                if hasattr(widget, "attach_shell"):
+                    widget.attach_shell(self)
                 self._pages[name] = (page, widget)
                 order.append(name)
 
@@ -209,8 +217,12 @@ class Dashboard(ctk.CTkFrame):
 
         # Ctrl+A / Ctrl+Shift+A / Ctrl+Enter go to the visible page; Ctrl+1..9 switch pages
         install_shortcuts(self, lambda: self._pages[self._current][1] if self._current else None)
-        bind_root(self, {f"<Control-Key-{i}>": (lambda e, n=n: self.show(n))
-                         for i, n in enumerate(order[:9], 1)})
+        numbered = [n for n in order if n != HOME]
+        keys = {f"<Control-Key-{i}>": (lambda e, n=n: self.show(n))
+                for i, n in enumerate(numbered[:9], 1)}
+        if HOME in self._pages:
+            keys["<Control-Key-0>"] = lambda e: self.show(HOME)
+        bind_root(self, keys)
 
         self._refresh_status()
         self._tick()
@@ -252,10 +264,14 @@ class Dashboard(ctk.CTkFrame):
                          anchor="w").grid(row=r, column=0, sticky="w", padx=12, pady=(12, 2))
             r += 1
             for name in names:
-                item = NavItem(nav, name, idx, self.show)
+                if name == HOME:
+                    item = NavItem(nav, name, 0, self.show)
+                else:
+                    item = NavItem(nav, name, idx, self.show)
+                    idx += 1
                 item.grid(row=r, column=0, sticky="ew", pady=1)
                 self._nav[name] = item
-                r, idx = r + 1, idx + 1
+                r += 1
 
         # Signed-in user + logout
         ctk.CTkFrame(side, height=1, fg_color=T.BORDER).grid(
@@ -295,12 +311,13 @@ class Dashboard(ctk.CTkFrame):
         self._subtitle = ctk.CTkLabel(hdr, text="", font=T.ui(12), text_color=T.MUTED, anchor="w")
         self._subtitle.grid(row=2, column=0, sticky="w")
 
-        keys = ctk.CTkLabel(hdr, text="^A all   ^⇧A none   ^↵ run   ^1-9 nav",
+        keys = ctk.CTkLabel(hdr, text="^A all   ^⇧A none   ^↵ run   ^0 home   ^1-9 nav",
                             font=T.mono(10), text_color=T.DIM)
         keys.grid(row=0, column=1, rowspan=3, sticky="se", pady=(0, 4))
         tip(keys, "Keyboard shortcuts\n"
                   "Ctrl+A  select all\nCtrl+Shift+A  select none\n"
                   "Ctrl+Enter  run the page's main action (asks first)\n"
+                  "Ctrl+0  Home\n"
                   "Ctrl+1 … Ctrl+9  jump to a page")
 
         ctk.CTkFrame(main, height=1, fg_color=T.BORDER).grid(
@@ -399,6 +416,9 @@ class Dashboard(ctk.CTkFrame):
         self._crumb_page.configure(text=name.upper())
         self._title.configure(text=name)
         self._subtitle.configure(text=subtitle)
+        on_show = getattr(self._pages[name][1], "on_show", None)
+        if callable(on_show):
+            on_show()
 
     # ── Changelog ────────────────────────────────────────────────────
 

@@ -48,6 +48,8 @@ Last updated: 2026-11-14
 **Part 3 in progress (2026-11-14): per-tab polish**
 - `ui/widgets.py`: `StatTile` / `tile_row`, `meta_line`, `section_header` (accent-stripe group bar), `status_cell`. `ui/theme.py`: shared `STATUS`, `STATUS_TAG`, `SEV`, `SEV_TAG` maps.
 - Security + Threat Report: summary is a row of stat tiles (risk / score / failed / warnings / passed; overall / compromise / exposure / flagged) + mono host/scan strip; denser rows with mono PASS/FAIL + severity columns, mono detail text, real alternating row colours; all hardcoded hex replaced with theme tokens.
+- Layout direction chosen 2026-11-14: **Good One + Command Center** (compared 7 mock-ups: Good One, Command Center, Split View, Setup Wizard, Compact Ribbon, Triage Board, Task Queue Console).
+- `ui/tab_home.py` Home page (OVERVIEW group, Ctrl+0, opens on start): cards for Security / Threats (from in-session scan results), Disk C:, Bloatware (debloat list vs installed Appx, background), Profiles (stale = 90+ days, background), System (uptime + pending restart via registry); recent actions from changes.log; Refresh button / Ctrl+Enter. Dashboard calls `attach_shell()` and `on_show()` on pages that define them.
 **Still to do:** per-tab polish for the remaining tabs (Debloat, Apps, Tweaks, Config, Cleanup, System, Users: denser lists, mono data columns), login screen restyle (login is currently disabled), undo history per tab, unified results dialog (collapse/expand), last-run + pass/fail badge on tab headers, progress feedback where missing, tooltips on System/Apps/Config/Users tabs, responsive layout.
 
 

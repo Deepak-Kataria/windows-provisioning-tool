@@ -125,7 +125,7 @@ ICON_FAMILY = "Segoe MDL2 Assets"  # present on Windows 10 and 11
 
 # Segoe MDL2 Assets glyphs used in the shell
 ICONS = {
-    "System": "", "Debloat": "", "Apps": "", "Tweaks": "",
+    "Home": "", "System": "", "Debloat": "", "Apps": "", "Tweaks": "",
     "Config": "", "Cleanup": "", "Security": "",
     "Threat Report": "", "Users": "",
     "info": "", "power": "", "refresh": "",
