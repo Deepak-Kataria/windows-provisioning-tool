@@ -724,7 +724,7 @@ class WindowsCleanupSection(ctk.CTkFrame):
         tip(self._scan_btn, "Measure how much space each location uses. Nothing is deleted.")
 
         self._clean_btn = ctk.CTkButton(btn_row, text="Clean Selected", width=130,
-                                        fg_color="#c0392b", hover_color="#922b21",
+                                        fg_color=T.DANGER, hover_color=T.DANGER_HOVER,
                                         command=self._clean)
         self._clean_btn.grid(row=0, column=1, padx=6)
         tip(self._clean_btn, "Delete the contents of the ticked locations (Ctrl+Enter). "
@@ -780,7 +780,7 @@ class WindowsCleanupSection(ctk.CTkFrame):
                     "font": ctk.CTkFont(size=12),
                 }
                 if loc.get("confirm"):
-                    cb_kw["text_color"] = ("#c0392b", "#ff7675")
+                    cb_kw["text_color"] = T.FAIL
 
                 cb = ctk.CTkCheckBox(items_card, **cb_kw)
                 cb.grid(row=i, column=0, padx=(14, 6), pady=5, sticky="w")

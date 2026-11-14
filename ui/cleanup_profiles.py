@@ -148,7 +148,7 @@ class ProfilesSection(ctk.CTkFrame):
         tip(self._scan_btn, "Measure reclaimable cache/temp space per profile. Nothing is deleted.")
 
         self._clean_btn = ctk.CTkButton(btn_row, text="Clean Selected", width=130,
-                                        fg_color="#c0392b", hover_color="#922b21",
+                                        fg_color=T.DANGER, hover_color=T.DANGER_HOVER,
                                         command=self._clean)
         self._clean_btn.grid(row=0, column=2, padx=6)
         tip(self._clean_btn, "Delete cache/temp junk from the ticked profiles (Ctrl+Enter). "
@@ -317,7 +317,7 @@ class ProfilesSection(ctk.CTkFrame):
             name_text = p["username"]
             if guarded:
                 name_text += "  [ACTIVE / CURRENT USER]"
-            name_color = ("#c0392b", "#ff7675") if guarded else None
+            name_color = T.FAIL if guarded else None
             name_kw = {"anchor": "w", "font": ctk.CTkFont(size=12)}
             if name_color:
                 name_kw["text_color"] = name_color
@@ -341,7 +341,7 @@ class ProfilesSection(ctk.CTkFrame):
             details_btn.grid(row=row, column=4, padx=(0, 6), pady=5, sticky="e")
 
             del_btn = ctk.CTkButton(self._list_card, text="Delete Profile", width=110, height=26,
-                                    fg_color="#c0392b", hover_color="#922b21",
+                                    fg_color=T.DANGER, hover_color=T.DANGER_HOVER,
                                     font=ctk.CTkFont(size=11),
                                     state="disabled" if guarded else "normal",
                                     command=lambda s=sid: self._delete_profile(s))

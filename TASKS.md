@@ -45,7 +45,10 @@ Last updated: 2026-11-14
 - `ui/theme.py`: dark navy palette with cyan accent, Segoe UI + Cascadia Mono/Consolas, CTk theme override applied in `main.py` (no extra file to bundle). Buttons given their own fg_color get light text automatically; secondary actions (Select All/None, Refresh, Scan Sizes, Up/Go) are outline buttons.
 - `ui/dashboard.py`: left sidebar (PROVISION / OPTIMIZE / DEFENSE / ADMIN groups, MDL2 icons, Ctrl+1..9), page header with breadcrumb + subtitle + shortcut hints, live status bar (online, host, IP, OS build, domain, user, elevation, uptime, clock). Opens maximised.
 - All tabs' hardcoded grey panels / `text_color="gray"` switched to theme tokens.
-**Still to do:** per-tab layout polish (stat tiles for Security/Threat risk, denser lists, mono data columns), login screen restyle (login is currently disabled), undo history per tab, unified results dialog (collapse/expand), last-run + pass/fail badge on tab headers, progress feedback where missing, tooltips on System/Apps/Config/Users tabs, responsive layout.
+**Part 3 in progress (2026-11-14): per-tab polish**
+- `ui/widgets.py`: `StatTile` / `tile_row`, `meta_line`, `section_header` (accent-stripe group bar), `status_cell`. `ui/theme.py`: shared `STATUS`, `STATUS_TAG`, `SEV`, `SEV_TAG` maps.
+- Security + Threat Report: summary is a row of stat tiles (risk / score / failed / warnings / passed; overall / compromise / exposure / flagged) + mono host/scan strip; denser rows with mono PASS/FAIL + severity columns, mono detail text, real alternating row colours; all hardcoded hex replaced with theme tokens.
+**Still to do:** per-tab polish for the remaining tabs (Debloat, Apps, Tweaks, Config, Cleanup, System, Users: denser lists, mono data columns), login screen restyle (login is currently disabled), undo history per tab, unified results dialog (collapse/expand), last-run + pass/fail badge on tab headers, progress feedback where missing, tooltips on System/Apps/Config/Users tabs, responsive layout.
 
 
 ---

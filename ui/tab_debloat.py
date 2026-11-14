@@ -82,7 +82,7 @@ class DebloatTab(ctk.CTkFrame):
                 row += 1
 
         self.remove_btn = ctk.CTkButton(self, text="Remove Selected Apps",
-                                         fg_color="#E53935", hover_color="#B71C1C",
+                                         fg_color=T.DANGER, hover_color=T.DANGER_HOVER,
                                          command=self._remove_apps)
         self.remove_btn.grid(row=2, column=0, padx=20, pady=(8, 2), sticky="w")
         tip(self.remove_btn, "Uninstall the ticked apps for all users (Ctrl+Enter). "

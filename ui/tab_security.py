@@ -12,17 +12,13 @@ from modules.logger import log, log_change
 from modules.runner import run_encoded_powershell
 from modules.security_report import build_html, build_text, machine_meta, ordered_checks
 from modules.utils import writable_path
-from ui.widgets import tip
+from ui.widgets import meta_line, section_header, tile_row, tip
 
 CHECKS = sc.CHECKS  # kept for any external imports
 
-_SEV_COLOR    = {"HIGH": "#c0392b", "MEDIUM": "#d35400", "LOW": "#7f8c8d"}
-_STATUS_COLOR = {"PASS": "#27ae60", "FAIL": "#e74c3c", "WARN": "#e67e22", "UNKNOWN": "gray",
-                 "INFO": "#2e86c1"}
-_STATUS_ICON  = {"PASS": "✓", "FAIL": "✗", "WARN": "⚠", "UNKNOWN": "?", "INFO": "i"}
-_LEVEL_COLOR  = {"CLEAN": "#27ae60", "LOW": "#2874a6", "MEDIUM": "#d35400",
-                 "HIGH": "#c0392b", "CRITICAL": "#7b241c"}
-_CAT_HDR_BG   = T.PANEL_2
+_STATUS_COLOR = T.STATUS
+_LEVEL_COLOR  = T.LEVEL
+_ROW_BG       = (T.PANEL, T.PANEL_2)   # alternating rows
 
 _SCAN_WORKERS = 6
 
@@ -105,28 +101,23 @@ class SecurityTab(ctk.CTkFrame):
     def _render_report(self):
         self._clear_report()
 
-        self._summary = ctk.CTkFrame(self._scroll, corner_radius=8)
-        self._summary.grid(row=0, column=0, padx=12, pady=(12, 6), sticky="ew")
-        self._summary.grid_columnconfigure(1, weight=1)
+        self._summary = ctk.CTkFrame(self._scroll, fg_color="transparent")
+        self._summary.grid(row=0, column=0, padx=12, pady=(12, 4), sticky="ew")
+        self._summary.grid_columnconfigure(0, weight=1)
         self._fill_summary()
 
         grid_row = 1
         for cat in sc.CATEGORIES:
-            hdr = ctk.CTkFrame(self._scroll, fg_color=_CAT_HDR_BG, corner_radius=0, height=38)
+            hdr, col = section_header(self._scroll, cat)
             hdr.grid(row=grid_row, column=0, padx=12, pady=(12, 0), sticky="ew")
-            hdr.grid_propagate(False)
-            hdr.grid_columnconfigure(1, weight=1)
-            hdr.grid_rowconfigure(0, weight=1)
-            ctk.CTkLabel(hdr, text=f"  {cat}", font=ctk.CTkFont(size=13, weight="bold"),
-                         anchor="w").grid(row=0, column=0, padx=6, sticky="w")
-            count_lbl = ctk.CTkLabel(hdr, text="", font=ctk.CTkFont(size=11),
+            count_lbl = ctk.CTkLabel(hdr, text="", font=T.mono(11),
                                      text_color=T.MUTED, anchor="w")
-            count_lbl.grid(row=0, column=1, padx=8, sticky="w")
+            count_lbl.grid(row=0, column=col, padx=4, sticky="w")
             fix_all_btn = ctk.CTkButton(
-                hdr, text="Fix All", width=120, height=26,
-                fg_color="#2980b9", hover_color="#1a5276",
+                hdr, text="Fix All", width=110, height=24,
                 command=lambda c=cat: self._open_fix_all(c))
-            fix_all_btn.grid(row=0, column=2, padx=8)
+            fix_all_btn.grid(row=0, column=col + 1, padx=8)
+            tip(fix_all_btn, f"Pick and apply the automatic fixes for {cat} (asks first)")
             self._cat_widgets[cat] = {"count_lbl": count_lbl, "fix_all_btn": fix_all_btn}
             grid_row += 1
 
@@ -149,36 +140,29 @@ class SecurityTab(ctk.CTkFrame):
             w.destroy()
         s = sc.risk_summary(self._results)
         c = s["counts"]
+        level_color = _LEVEL_COLOR[s["level"]]
+        score_color = T.OK if s["score"] >= 80 else (T.WARN if s["score"] >= 50 else T.FAIL)
+        n_fixable = sum(len(self._fix_all_candidates(cat)) for cat in sc.CATEGORIES)
 
-        ctk.CTkLabel(
-            self._summary, text=f"  {s['level']}  ", fg_color=_LEVEL_COLOR[s["level"]],
-            text_color="white", corner_radius=6, height=44,
-            font=ctk.CTkFont(size=18, weight="bold")
-        ).grid(row=0, column=0, rowspan=3, padx=(14, 12), pady=12, sticky="ns")
-
-        ctk.CTkLabel(
-            self._summary, text=f"Security score  {s['score']} / 100",
-            font=ctk.CTkFont(size=15, weight="bold"), anchor="w"
-        ).grid(row=0, column=1, padx=0, pady=(12, 0), sticky="w")
+        tiles = [
+            ("Risk level", s["level"], level_color, "overall exposure"),
+            ("Score", f"{s['score']}/100", score_color, "higher is better"),
+            ("Failed", c["FAIL"], T.FAIL if c["FAIL"] else T.DIM,
+             f"{n_fixable} auto-fixable" if n_fixable else "none auto-fixable"),
+            ("Warnings", c["WARN"], T.WARN if c["WARN"] else T.DIM, "review recommended"),
+            ("Passed", c["PASS"], T.OK, f"of {len(CHECKS)} checks"),
+        ]
+        if c["UNKNOWN"]:
+            tiles.append(("Unknown", c["UNKNOWN"], T.MUTED, "check could not run"))
+        row, _ = tile_row(self._summary, tiles)
+        row.grid(row=0, column=0, sticky="ew")
 
         meta = machine_meta()
-        ctk.CTkLabel(
-            self._summary,
-            text=f"{meta['computer']}   |   Scanned {self._scan_time or '-'}   |   {len(CHECKS)} checks",
-            text_color=T.MUTED, font=ctk.CTkFont(size=11), anchor="w"
-        ).grid(row=1, column=1, sticky="w")
-
-        pills = ctk.CTkFrame(self._summary, fg_color="transparent")
-        pills.grid(row=2, column=1, pady=(4, 12), sticky="w")
-        items = [(f"  {c['FAIL']} FAILED  ", "#c0392b"),
-                 (f"  {c['WARN']} WARNING  ", "#d35400"),
-                 (f"  {c['PASS']} PASSED  ", "#27ae60")]
-        if c["UNKNOWN"]:
-            items.append((f"  {c['UNKNOWN']} UNKNOWN  ", "#7f8c8d"))
-        for col, (label, color) in enumerate(items):
-            ctk.CTkLabel(pills, text=label, fg_color=color, text_color="white", corner_radius=5,
-                         font=ctk.CTkFont(size=11, weight="bold"), height=26
-                         ).grid(row=0, column=col, padx=(0, 6))
+        meta_line(self._summary, [("host", meta["computer"]),
+                                  ("scanned", self._scan_time or "-"),
+                                  ("checks", len(CHECKS)),
+                                  ("fixed this session", len(self._fixed))]
+                  ).grid(row=1, column=0, pady=(8, 0), sticky="w")
 
     def _fix_all_candidates(self, cat):
         return [c for c in ordered_checks(cat, self._results)
@@ -198,8 +182,8 @@ class SecurityTab(ctk.CTkFrame):
         if n_warn:
             parts.append(f"{n_warn} warning{'s' if n_warn != 1 else ''}")
         text = " · ".join(parts) if parts else f"all {len(ids)} passed"
-        color = "#e74c3c" if n_fail else ("#e67e22" if n_warn else "#27ae60")
-        w["count_lbl"].configure(text=f"{text}   ({len(ids)} checks)", text_color=color)
+        color = T.FAIL if n_fail else (T.WARN if n_warn else T.OK)
+        w["count_lbl"].configure(text=f"{text}   [{len(ids)}]", text_color=color)
 
         n_fix = len(self._fix_all_candidates(cat))
         w["fix_all_btn"].configure(
@@ -207,38 +191,34 @@ class SecurityTab(ctk.CTkFrame):
             state="normal" if n_fix and not self._running else "disabled")
 
     def _add_result_row(self, parent, check, row_idx):
-        bg = T.PANEL_2 if row_idx % 2 == 0 else T.PANEL_2
-        row = ctk.CTkFrame(parent, fg_color=bg, corner_radius=0)
+        row = ctk.CTkFrame(parent, fg_color=_ROW_BG[row_idx % 2], corner_radius=0)
         row.grid(row=row_idx, column=0, sticky="ew")
-        row.grid_columnconfigure(2, weight=1)
+        row.grid_columnconfigure(3, weight=1)
 
-        icon_lbl = ctk.CTkLabel(row, text="", width=30, font=ctk.CTkFont(size=14, weight="bold"))
-        icon_lbl.grid(row=0, column=0, rowspan=2, padx=(8, 2), pady=8)
+        icon_lbl = ctk.CTkLabel(row, text="", width=44, font=T.mono(11, "bold"))
+        icon_lbl.grid(row=0, column=0, rowspan=2, padx=(10, 4), pady=4, sticky="n")
 
-        name_frame = ctk.CTkFrame(row, fg_color="transparent", width=210)
-        name_frame.grid(row=0, column=1, rowspan=2, padx=(0, 12), pady=8, sticky="w")
-        name_lbl = ctk.CTkLabel(name_frame, text=check["name"], width=210, anchor="w",
-                                justify="left", wraplength=205,
-                                font=ctk.CTkFont(size=12, weight="bold"))
-        name_lbl.grid(row=0, column=0, sticky="w")
         sev = check["severity"]
-        ctk.CTkLabel(name_frame, text=f" {sev} ", height=16, corner_radius=3,
-                     fg_color=_SEV_COLOR[sev], text_color="white",
-                     font=ctk.CTkFont(size=9, weight="bold")
-                     ).grid(row=1, column=0, pady=(2, 0), sticky="w")
+        ctk.CTkLabel(row, text=T.SEV_TAG.get(sev, sev), width=36, font=T.mono(10, "bold"),
+                     text_color=T.SEV[sev]).grid(row=0, column=1, padx=(0, 6), pady=4, sticky="n")
 
-        detail_lbl = ctk.CTkLabel(row, text="", font=ctk.CTkFont(size=11), anchor="w",
-                                  wraplength=400, justify="left")
-        detail_lbl.grid(row=0, column=2, padx=(0, 12), pady=(8, 0), sticky="w")
+        name_lbl = ctk.CTkLabel(row, text=check["name"], width=230, anchor="w",
+                                justify="left", wraplength=225,
+                                font=ctk.CTkFont(size=12, weight="bold"))
+        name_lbl.grid(row=0, column=2, rowspan=2, padx=(0, 12), pady=4, sticky="nw")
+
+        detail_lbl = ctk.CTkLabel(row, text="", font=T.mono(11), anchor="w",
+                                  wraplength=460, justify="left")
+        detail_lbl.grid(row=0, column=3, padx=(0, 12), pady=(4, 0), sticky="w")
 
         if check.get("impact"):
-            ctk.CTkLabel(row, text=f"If fixed: {check['impact']}",
-                         font=ctk.CTkFont(size=10, slant="italic"), text_color=T.MUTED,
-                         anchor="w", wraplength=400, justify="left"
-                         ).grid(row=1, column=2, padx=(0, 12), pady=(0, 8), sticky="w")
+            ctk.CTkLabel(row, text=f"if fixed: {check['impact']}",
+                         font=ctk.CTkFont(size=10, slant="italic"), text_color=T.DIM,
+                         anchor="w", wraplength=460, justify="left", height=16
+                         ).grid(row=1, column=3, padx=(0, 12), pady=(0, 4), sticky="w")
 
         btn_frame = ctk.CTkFrame(row, fg_color="transparent")
-        btn_frame.grid(row=0, column=3, rowspan=2, padx=(0, 10), pady=6)
+        btn_frame.grid(row=0, column=4, rowspan=2, padx=(0, 10), pady=4)
 
         self._row_widgets[check["id"]] = {
             "icon_lbl": icon_lbl, "name_lbl": name_lbl, "detail_lbl": detail_lbl,
@@ -252,11 +232,11 @@ class SecurityTab(ctk.CTkFrame):
         w = self._row_widgets.get(check_id)
         if not w:
             return
-        color = _STATUS_COLOR.get(status, "gray")
-        w["icon_lbl"].configure(text=f" {_STATUS_ICON.get(status, '?')} ", text_color=color)
-        w["name_lbl"].configure(text_color=color)
+        color = _STATUS_COLOR.get(status, T.MUTED)
+        w["icon_lbl"].configure(text=T.STATUS_TAG.get(status, " ?? "), text_color=color)
+        w["name_lbl"].configure(text_color=T.TEXT_BRIGHT if status != "PASS" else T.TEXT)
         w["detail_lbl"].configure(text=detail or check["description"],
-                                  text_color=color if detail else T.MUTED)
+                                  text_color=color if detail and status != "PASS" else T.MUTED)
 
         for child in w["btn_frame"].winfo_children():
             child.destroy()
@@ -265,15 +245,13 @@ class SecurityTab(ctk.CTkFrame):
         col = 0
         if status in ("FAIL", "WARN") and check.get("fix_ps"):
             w["fix_btn"] = ctk.CTkButton(
-                w["btn_frame"], text=check["fix_label"], width=145, height=28,
-                fg_color="#2980b9", hover_color="#1a5276",
+                w["btn_frame"], text=check["fix_label"], width=145, height=24,
                 command=lambda c=check: self._run_fix(c))
             w["fix_btn"].grid(row=0, column=col, padx=(0, 4))
             col += 1
         if check.get("undo_ps"):
-            w["revert_btn"] = ctk.CTkButton(
-                w["btn_frame"], text=check.get("undo_label", "Revert"), width=160, height=28,
-                fg_color="#7f8c8d", hover_color="#5d6d7e",
+            w["revert_btn"] = T.outline_button(
+                w["btn_frame"], text=check.get("undo_label", "Revert"), width=185, height=24,
                 command=lambda c=check: self._run_revert(c))
             w["revert_btn"].grid(row=0, column=col, padx=(4, 0))
 
@@ -287,7 +265,7 @@ class SecurityTab(ctk.CTkFrame):
     def _update_status_line(self, prefix="Scan complete"):
         s = sc.risk_summary(self._results)
         c = s["counts"]
-        color = "#e74c3c" if c["FAIL"] else ("#e67e22" if c["WARN"] else "#27ae60")
+        color = T.FAIL if c["FAIL"] else (T.WARN if c["WARN"] else T.OK)
         self._status_lbl.configure(
             text=f"{prefix}  |  {s['level']} ({s['score']}/100)  |  "
                  f"{c['FAIL']} failed  {c['WARN']} warnings  {c['PASS']} passed",
@@ -454,7 +432,7 @@ class SecurityTab(ctk.CTkFrame):
             note = ("⚠ May interrupt users. " if check["disruptive"] else "") + check.get("impact", "")
             ctk.CTkLabel(box, text=note, wraplength=540, justify="left", anchor="w",
                          font=ctk.CTkFont(size=10, slant="italic"),
-                         text_color="#d35400" if check["disruptive"] else T.MUTED
+                         text_color=T.WARN if check["disruptive"] else T.MUTED
                          ).grid(row=1, column=0, padx=(38, 10), pady=(0, 8), sticky="w")
 
         btns = ctk.CTkFrame(dlg, fg_color="transparent")
@@ -463,7 +441,7 @@ class SecurityTab(ctk.CTkFrame):
         def selected():
             return [c for c in candidates if vars_[c["id"]].get()]
 
-        apply_btn = ctk.CTkButton(btns, width=150, fg_color="#2980b9", hover_color="#1a5276")
+        apply_btn = ctk.CTkButton(btns, width=150)
 
         def refresh_apply(*_):
             n = len(selected())
@@ -531,7 +509,7 @@ class SecurityTab(ctk.CTkFrame):
             with open(txt_path, "w", encoding="utf-8") as f:
                 f.write(build_text(self._results, self._fixed, meta))
         except Exception as e:
-            self._status_lbl.configure(text=f"Export failed: {e}", text_color="#e74c3c")
+            self._status_lbl.configure(text=f"Export failed: {e}", text_color=T.FAIL)
             return
         log(f"Security report exported: {html_path} / {txt_path}")
         self._status_lbl.configure(text=f"Report saved: {html_path} (+ .txt)", text_color=T.MUTED)

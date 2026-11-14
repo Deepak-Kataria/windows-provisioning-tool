@@ -9,9 +9,9 @@ from modules.utils import format_size
 from ui.widgets import tip
 
 HEALTH_COLORS = {
-    "Healthy": "#2ecc71",
-    "Warning": "#f39c12",
-    "Unhealthy": "#e74c3c",
+    "Healthy": T.OK,
+    "Warning": T.WARN,
+    "Unhealthy": T.FAIL,
     "Unknown": "gray",
 }
 
@@ -190,13 +190,13 @@ class DiskAnalysisSection(ctk.CTkFrame):
             free_pct = (d["free"] / d["size"] * 100) if d["size"] else 0
             used_frac = 1 - (d["free"] / d["size"]) if d["size"] else 0
 
-            bar_color = "#e74c3c" if free_pct < 10 else ("#f39c12" if free_pct < 20 else "#2ecc71")
+            bar_color = T.FAIL if free_pct < 10 else (T.WARN if free_pct < 20 else T.OK)
             bar = ctk.CTkProgressBar(row, width=200, progress_color=bar_color)
             bar.set(used_frac)
             bar.grid(row=0, column=1, padx=(0, 14))
 
             size_text = f"{format_size(d['free'])} free of {format_size(d['size'])}  ({free_pct:.0f}% free)"
-            size_color = "#e74c3c" if free_pct < 10 else None
+            size_color = T.FAIL if free_pct < 10 else None
             size_kw = {"anchor": "w", "font": ctk.CTkFont(size=12)}
             if size_color:
                 size_kw["text_color"] = size_color

@@ -1,9 +1,82 @@
-"""Shared UI helpers: tooltips, confirm-before-run dialog, tab keyboard shortcuts."""
+"""Shared UI helpers: tooltips, stat tiles, section headers, confirm-before-run dialog,
+tab keyboard shortcuts."""
 import tkinter as tk
 
 import customtkinter as ctk
 
 from ui import theme as T
+
+# ── Stat tile / section header ──────────────────────────────────────
+
+
+class StatTile(ctk.CTkFrame):
+    """Dashboard tile: coloured left bar, small caps label, big mono value, optional subline."""
+
+    def __init__(self, master, label, value="-", color=None, sub=""):
+        super().__init__(master, fg_color=T.PANEL, corner_radius=4,
+                         border_width=1, border_color=T.BORDER)
+        self.grid_columnconfigure(1, weight=1)
+        self._bar = ctk.CTkFrame(self, width=3, height=1, corner_radius=0)
+        self._bar.grid(row=0, column=0, rowspan=3, sticky="ns", padx=(1, 0), pady=1)
+        ctk.CTkLabel(self, text=label.upper(), font=T.mono(10), text_color=T.MUTED,
+                     anchor="w", height=14).grid(row=0, column=1, padx=12, pady=(10, 0), sticky="w")
+        self._value = ctk.CTkLabel(self, text="", font=T.mono(24, "bold"), anchor="w", height=32)
+        self._value.grid(row=1, column=1, padx=12, sticky="w")
+        self._sub = ctk.CTkLabel(self, text="", font=ctk.CTkFont(size=11), text_color=T.MUTED,
+                                 anchor="w", justify="left", height=16, wraplength=220)
+        self._sub.grid(row=2, column=1, padx=12, pady=(0, 10), sticky="w")
+        self.set(value, color, sub)
+
+    def set(self, value, color=None, sub=""):
+        color = color or T.TEXT_BRIGHT
+        self._bar.configure(fg_color=color)
+        self._value.configure(text=str(value), text_color=color)
+        self._sub.configure(text=sub or " ")
+
+
+def tile_row(master, tiles):
+    """Lay out [(label, value, color, sub), ...] as equal-width tiles; returns {label: tile}."""
+    row = ctk.CTkFrame(master, fg_color="transparent")
+    out = {}
+    for i, (label, value, color, sub) in enumerate(tiles):
+        row.grid_columnconfigure(i, weight=1, uniform="tile")
+        t = StatTile(row, label, value, color, sub)
+        t.grid(row=0, column=i, padx=(0 if i == 0 else 4, 0 if i == len(tiles) - 1 else 4),
+               sticky="nsew")
+        out[label] = t
+    return row, out
+
+
+def meta_line(master, pairs):
+    """Mono 'KEY value   KEY value' strip for host / scan metadata."""
+    f = ctk.CTkFrame(master, fg_color="transparent")
+    for i, (k, v) in enumerate(pairs):
+        ctk.CTkLabel(f, text=k.upper(), font=T.mono(10), text_color=T.DIM).grid(
+            row=0, column=2 * i, padx=(0 if i == 0 else 18, 6))
+        ctk.CTkLabel(f, text=str(v), font=T.mono(11), text_color=T.TEXT).grid(
+            row=0, column=2 * i + 1)
+    return f
+
+
+def section_header(master, title, height=34, accent=None, big=False):
+    """Group header bar with an accent stripe. Returns (frame, next_free_column);
+    that column stretches, so callers put a count there and buttons further right."""
+    hdr = ctk.CTkFrame(master, fg_color=T.PANEL_2, corner_radius=0, height=height)
+    hdr.grid_propagate(False)
+    hdr.grid_rowconfigure(0, weight=1)
+    hdr.grid_columnconfigure(2, weight=1)
+    ctk.CTkFrame(hdr, width=3, height=1, corner_radius=0, fg_color=accent or T.ACCENT).grid(
+        row=0, column=0, sticky="ns")
+    ctk.CTkLabel(hdr, text=title.upper(), font=T.mono(13 if big else 12, "bold"),
+                 text_color=T.TEXT_BRIGHT, anchor="w").grid(row=0, column=1, padx=(10, 12), sticky="w")
+    return hdr, 2
+
+
+def status_cell(master, status):
+    """Fixed-width mono status tag, e.g. FAIL in red."""
+    return ctk.CTkLabel(master, text=T.STATUS_TAG.get(status, " ?? "), width=44,
+                        font=T.mono(11, "bold"), text_color=T.STATUS.get(status, T.MUTED))
+
 
 # ── Tooltip ─────────────────────────────────────────────────────────
 

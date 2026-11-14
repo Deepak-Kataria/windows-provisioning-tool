@@ -49,7 +49,7 @@ class TweaksTab(ctk.CTkFrame):
             row = self._add_tweak_row(left, tweak, row)
 
         # Advanced
-        self._section_label(left, "Advanced Tweaks  —  CAUTION", row, color="#FF8F00")
+        self._section_label(left, "Advanced Tweaks  —  CAUTION", row, color=T.WARN)
         row += 1
         for tweak in self._config["advanced"]:
             row = self._add_tweak_row(left, tweak, row)
@@ -355,7 +355,7 @@ class TweaksTab(ctk.CTkFrame):
         dialog.grid_columnconfigure(0, weight=1)
 
         # Summary header
-        summary_color = "#4CAF50" if failed == 0 else "#FF8F00"
+        summary_color = T.OK if failed == 0 else T.WARN
         summary_text = f"Done — {succeeded} ok"
         if failed:
             summary_text += f", {failed} failed"
@@ -373,13 +373,13 @@ class TweaksTab(ctk.CTkFrame):
 
         for idx, (name, ok, err, cmd) in enumerate(results):
             if ok is True:
-                icon, color = "✓", "#4CAF50"
+                icon, color = "✓", T.OK
                 detail = ""
             elif ok is False:
-                icon, color = "✗", "#f44336"
+                icon, color = "✗", T.FAIL
                 detail = err
             else:
-                icon, color = "—", "#888888"
+                icon, color = "—", T.MUTED
                 detail = err
 
             row_frame = ctk.CTkFrame(scroll, fg_color=T.PANEL_2, corner_radius=6)
@@ -395,7 +395,7 @@ class TweaksTab(ctk.CTkFrame):
 
             if detail:
                 ctk.CTkLabel(row_frame, text=detail, anchor="w",
-                              text_color="#ff8a80" if ok is False else "#aaaaaa",
+                              text_color=T.FAIL if ok is False else T.MUTED,
                               font=ctk.CTkFont(size=10),
                               wraplength=440).grid(
                     row=1, column=1, sticky="w", padx=4, pady=(0, 2))

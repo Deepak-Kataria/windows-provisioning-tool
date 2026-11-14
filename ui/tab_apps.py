@@ -219,7 +219,7 @@ class AppsTab(ctk.CTkFrame):
         ctk.CTkLabel(output_hdr, text="Output",
                       font=ctk.CTkFont(size=14, weight="bold")).grid(row=0, column=0, sticky="w")
         self.stop_btn = ctk.CTkButton(output_hdr, text="Stop", width=80,
-                                       fg_color="#d32f2f", hover_color="#b71c1c",
+                                       fg_color=T.DANGER, hover_color=T.DANGER_HOVER,
                                        state="disabled", command=self._stop_install)
         self.stop_btn.grid(row=0, column=1, sticky="e")
 
@@ -391,7 +391,7 @@ class AppsTab(ctk.CTkFrame):
                                    placeholder_text="e.g. /silent  or  /S  or  /quiet /norestart")
         args_entry.grid(row=2, column=1, columnspan=2, padx=(0, 16), pady=6, sticky="ew")
 
-        err_label = ctk.CTkLabel(dialog, text="", text_color="#ff6b6b", font=ctk.CTkFont(size=11))
+        err_label = ctk.CTkLabel(dialog, text="", text_color=T.FAIL, font=ctk.CTkFont(size=11))
         err_label.grid(row=3, column=0, columnspan=3, padx=16, pady=(0, 4), sticky="w")
 
         def confirm():

@@ -12,3 +12,4 @@ _build_env/
 *logs*.txt
 *logs*.doc
 gpresult.html
+ui_settings.json

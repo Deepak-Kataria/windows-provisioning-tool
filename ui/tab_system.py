@@ -543,7 +543,7 @@ class SystemTab(ctk.CTkFrame):
         countdown_var = ctk.StringVar(value="Restarting in 30 seconds...")
         ctk.CTkLabel(dlg, textvariable=countdown_var,
                      font=ctk.CTkFont(size=13, weight="bold"),
-                     text_color="#FF8A65").pack(padx=30, pady=(0, 20))
+                     text_color=T.WARN).pack(padx=30, pady=(0, 20))
 
         btn_row = ctk.CTkFrame(dlg, fg_color="transparent")
         btn_row.pack(padx=30, pady=(0, 24))
@@ -566,7 +566,7 @@ class SystemTab(ctk.CTkFrame):
                       fg_color="#555", hover_color="#444",
                       command=cancel).grid(row=0, column=0, padx=(0, 12))
         ctk.CTkButton(btn_row, text="Restart Now", width=130,
-                      fg_color="#E53935", hover_color="#B71C1C",
+                      fg_color=T.DANGER, hover_color=T.DANGER_HOVER,
                       command=do_restart).grid(row=0, column=1)
 
         # Schedule shutdown in 30s, then tick countdown

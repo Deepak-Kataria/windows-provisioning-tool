@@ -56,7 +56,7 @@ class FirstRunDialog(ctk.CTkToplevel):
                                         show="*")
         self.confirm_pw.grid(row=5, column=0, padx=30, pady=(0, 8))
 
-        self.error_label = ctk.CTkLabel(self, text="", text_color="#FF5555",
+        self.error_label = ctk.CTkLabel(self, text="", text_color=T.FAIL,
                                          font=ctk.CTkFont(size=12))
         self.error_label.grid(row=6, column=0, pady=(0, 4))
 

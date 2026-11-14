@@ -34,7 +34,7 @@ class UsersTab(ctk.CTkFrame):
         ctk.CTkButton(btn_row, text="Reset Password", width=140,
                        command=self._reset_password).grid(row=0, column=0, padx=(0, 8))
         ctk.CTkButton(btn_row, text="Delete User", width=120,
-                       fg_color="#E53935", hover_color="#B71C1C",
+                       fg_color=T.DANGER, hover_color=T.DANGER_HOVER,
                        command=self._delete_user).grid(row=0, column=1)
 
         # --- Add User ---
@@ -70,7 +70,7 @@ class UsersTab(ctk.CTkFrame):
                                        variable=self.role_var, width=280)
         role_menu.grid(row=10, column=0, padx=16, pady=(0, 12), sticky="w")
 
-        self.add_error = ctk.CTkLabel(add_frame, text="", text_color="#FF5555",
+        self.add_error = ctk.CTkLabel(add_frame, text="", text_color=T.FAIL,
                                        font=ctk.CTkFont(size=12))
         self.add_error.grid(row=11, column=0, pady=(0, 4))
 
@@ -95,7 +95,7 @@ class UsersTab(ctk.CTkFrame):
             row.grid(row=i, column=0, sticky="ew", padx=4, pady=3)
             row.grid_columnconfigure(1, weight=1)
 
-            badge_color = "#4CAF50" if user["role"] == "admin" else "#2196F3"
+            badge_color = T.OK if user["role"] == "admin" else "#2196F3"
             ctk.CTkLabel(row, text=f"  {user['role'].upper()}  ",
                           fg_color=badge_color, corner_radius=4,
                           font=ctk.CTkFont(size=10), text_color="white").grid(
@@ -116,7 +116,7 @@ class UsersTab(ctk.CTkFrame):
         for uname, (row, btn) in self._row_buttons.items():
             if uname == username:
                 row.configure(fg_color=T.PANEL_3)
-                btn.configure(text="Selected", fg_color="#4CAF50", border_width=0)
+                btn.configure(text="Selected", fg_color=T.OK, border_width=0)
             else:
                 row.configure(fg_color="transparent")
                 btn.configure(text="Select", fg_color="transparent", border_width=1)
@@ -172,7 +172,7 @@ class UsersTab(ctk.CTkFrame):
         self._refresh_list()
 
     def _set_status(self, message, error=False):
-        color = "#FF5555" if error else "#4CAF50"
+        color = T.FAIL if error else T.OK
         self.status_label.configure(text=message, text_color=color)
         self.after(4000, lambda: self.status_label.configure(text=""))
 
@@ -215,7 +215,7 @@ class ResetPasswordDialog(ctk.CTkToplevel):
                                      placeholder_text="Repeat password")
         self.confirm.grid(row=4, column=0, padx=24, pady=(4, 6))
 
-        self.error = ctk.CTkLabel(self, text="", text_color="#FF5555",
+        self.error = ctk.CTkLabel(self, text="", text_color=T.FAIL,
                                    font=ctk.CTkFont(size=12))
         self.error.grid(row=5, column=0, pady=(0, 4))
 

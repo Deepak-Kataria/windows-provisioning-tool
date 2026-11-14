@@ -41,7 +41,7 @@ class LoginScreen(ctk.CTkFrame):
                                             show="*")
         self.password_entry.grid(row=3, column=0, padx=30, pady=(0, 8))
 
-        self.error_label = ctk.CTkLabel(card, text="", text_color="#FF5555",
+        self.error_label = ctk.CTkLabel(card, text="", text_color=T.FAIL,
                                          font=ctk.CTkFont(size=12))
         self.error_label.grid(row=4, column=0, pady=(0, 4))
 

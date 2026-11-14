@@ -240,9 +240,9 @@ class ConfigTab(ctk.CTkFrame):
         }
         try:
             sheets_sync.save_config(cfg)
-            self._sheets_status.configure(text="Saved.", text_color="#81C784")
+            self._sheets_status.configure(text="Saved.", text_color=T.OK)
         except Exception as e:
-            self._sheets_status.configure(text=f"Save failed: {e}", text_color="#E57373")
+            self._sheets_status.configure(text=f"Save failed: {e}", text_color=T.FAIL)
 
     def _test_sheets_connection(self):
         self._save_sheets_config()
@@ -253,7 +253,7 @@ class ConfigTab(ctk.CTkFrame):
 
             def done():
                 self._sheets_status.configure(
-                    text=msg, text_color="#81C784" if ok else "#E57373")
+                    text=msg, text_color=T.OK if ok else T.FAIL)
             self.after(0, done)
 
         threading.Thread(target=task, daemon=True).start()
