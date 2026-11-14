@@ -8,44 +8,6 @@ Last updated: 2026-11-12
 
 ---
 
-### #13 — System Compromise & Threat Report
-**Status:** Pending  
-**Details:**  
-
-**Goal:** Full report answering "has this machine been compromised, and what vulnerabilities exist that could allow it?"
-
-**Compromise Indicators (was it hacked?):**
-- Unusual local admin accounts (accounts not in approved list)
-- Unexpected scheduled tasks (non-Microsoft, recently created)
-- Suspicious startup entries (Run/RunOnce registry keys, Startup folder)
-- Running processes — flag unknown/unsigned processes
-- Recently installed software (last 30/60/90 days) — list for review
-- Open outbound connections — active network connections to external IPs
-- Windows Event Log analysis: failed logins (4625), account lockouts (4740), new account creation (4720), privilege escalation (4672), RDP sessions (4624 logon type 10)
-- Modified system files / unexpected files in System32
-- Antivirus/Defender last scan date + any quarantined threats
-
-**Vulnerability Exposure (can it be hacked?):**
-- All checks from Security tab (#10) included
-- Unpatched CVEs — compare installed software versions against known-vulnerable list
-- Weak/blank local account passwords (test with net accounts policy)
-- RDP exposed + no NLA
-- SMB shares open to Everyone
-- PowerShell execution policy (Unrestricted = risk)
-- WinRM enabled unexpectedly
-- AutoRun enabled on removable drives
-- Outdated BIOS/firmware version check
-
-**Report output:**
-- Overall risk score: CLEAN / LOW / MEDIUM / HIGH / CRITICAL
-- Two sections: "Signs of Compromise" + "Vulnerability Exposure"
-- Each finding: severity badge, description, recommended action
-- Export to HTML report file (readable, shareable)
-- Export to TXT (plain, for tickets)
-- Timestamp + machine name in report header
-
----
-
 ### #11 — Domain join self-service for normal users
 **Status:** Pending  
 **Details:**  
@@ -83,9 +45,20 @@ Last updated: 2026-11-12
 
 ## Completed (this session continued)
 
+### #13 — System Compromise & Threat Report ✓
+**Completed:** 2026-11-12 (needs a test run, as administrator, on a real machine)
+**Result:** New admin-only **Threat Report** tab (`ui/tab_threat.py`) — checks in `modules/threat_checks.py`, scoring + TXT/HTML in `modules/threat_report.py` (shares building blocks with `modules/security_report.py`).
+- **Signs of Compromise (13 indicators):** event log cleared (1102/104), failed logons + lockouts (4625/4740, brute-force threshold), new accounts / added to Administrators (4720/4732), unapproved local admins (vs `config/approved_admins.json`), RDP logons (4624 type 10, public source IPs flagged), recently created scheduled tasks, suspicious startup entries (Run/RunOnce for machine + all loaded users, Startup folders; script hosts, download one-liners, unsigned exes in user-writable paths), unsigned running processes, external network connections (backdoor/IRC/Tor ports, unsigned callers), recently installed software, new unsigned files in System32/drivers, Defender detections + last scan, hosts-file tampering.
+- **Vulnerability Exposure:** every Security tab check. 4 new checks added to the Security tab for this (now 40): weak passwords (blank-password test via one empty-password network logon for accounts with PasswordRequired=False — logs one 4625 per such account; min length; lockout), WinRM listener, PowerShell execution policy, BIOS age.
+- Event 4672 (special privileges) deliberately left out — it fires on every admin logon, so it's noise rather than signal.
+- **Scoring:** compromise level (any HIGH-severity FAIL → CRITICAL) and exposure level from the Security scoring; overall = the worse of the two. New INFO status for "listed for review" items (no penalty).
+- Each finding shows severity, description and a recommended action, plus a button to open the relevant console (Event Viewer, Task Scheduler, Task Manager...).
+- **Export:** `logs/threat_report_<PC>_<timestamp>.html` + `.txt` with machine/OS/user/timestamp header.
+- Event-log checks report UNKNOWN when not elevated (Get-WinEvent otherwise falsely reports "no events").
+
 ### #10 — Expand Security tab with more vulnerability checks ✓
 **Completed:** 2026-11-12 (needs a test run on a real machine — see below)
-**Result:** 36 checks (was 23). Check definitions moved to `modules/security_checks.py` and report builders to `modules/security_report.py` so #13 can reuse both.
+**Result:** 36 checks (was 23; 40 after #13). Check definitions moved to `modules/security_checks.py` and report builders to `modules/security_report.py` so #13 can reuse both.
 - **13 new checks:** open listening ports, shared folder exposure (Everyone/Guest), LLMNR/NetBIOS poisoning, local admin accounts, LAPS status, running services audit (SNMP/UPnP/WinRM/FTP/IIS/sshd/TeamViewer/AnyDesk/VNC…), suspicious scheduled tasks (unsigned exes in user-writable paths, encoded/download one-liners), known-vulnerable/EOL software (static `KNOWN_VULNERABLE` list — review periodically), machine certificate expiry, AutoRun on removable drives, Secure Boot/UEFI/TPM, driver health/outdated drivers, USB mass storage policy.
 - **Categories:** Network / Accounts / System / Policy / Hardware; within a category failures sort first. Each row shows a severity badge.
 - **Risk score:** CLEAN/LOW/MEDIUM/HIGH/CRITICAL level (same scale #13 will use) + 0–100 score from weighted severity×status penalties.

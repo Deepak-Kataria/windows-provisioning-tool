@@ -14,8 +14,9 @@ from modules.utils import writable_path
 CHECKS = sc.CHECKS  # kept for any external imports
 
 _SEV_COLOR    = {"HIGH": "#c0392b", "MEDIUM": "#d35400", "LOW": "#7f8c8d"}
-_STATUS_COLOR = {"PASS": "#27ae60", "FAIL": "#e74c3c", "WARN": "#e67e22", "UNKNOWN": "gray"}
-_STATUS_ICON  = {"PASS": "✓", "FAIL": "✗", "WARN": "⚠", "UNKNOWN": "?"}
+_STATUS_COLOR = {"PASS": "#27ae60", "FAIL": "#e74c3c", "WARN": "#e67e22", "UNKNOWN": "gray",
+                 "INFO": "#2e86c1"}
+_STATUS_ICON  = {"PASS": "✓", "FAIL": "✗", "WARN": "⚠", "UNKNOWN": "?", "INFO": "i"}
 _LEVEL_COLOR  = {"CLEAN": "#27ae60", "LOW": "#2874a6", "MEDIUM": "#d35400",
                  "HIGH": "#c0392b", "CRITICAL": "#7b241c"}
 _CAT_HDR_BG   = ("gray82", "gray24")
@@ -305,7 +306,7 @@ class SecurityTab(ctk.CTkFrame):
         log("Security: scan started")
 
         def run_one(check):
-            _, out = run_encoded_powershell(check["check_ps"])
+            _, out = run_encoded_powershell(check["check_ps"], timeout=check.get("timeout", 120))
             return check, sc.evaluate(check, out)
 
         def task():
