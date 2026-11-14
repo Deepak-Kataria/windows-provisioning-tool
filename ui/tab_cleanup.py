@@ -16,7 +16,8 @@ class CleanupTab(ctk.CTkFrame):
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
-        tabs = ctk.CTkTabview(self)
+        self._sections = {}
+        self._tabs = tabs = ctk.CTkTabview(self)
         tabs.grid(row=0, column=0, sticky="nsew")
 
         sections = [
@@ -31,3 +32,7 @@ class CleanupTab(ctk.CTkFrame):
             page.grid_columnconfigure(0, weight=1)
             widget = SectionClass(page, self.role)
             widget.grid(row=0, column=0, sticky="nsew")
+            self._sections[name] = widget
+
+    def shortcut_target(self):
+        return self._sections.get(self._tabs.get())

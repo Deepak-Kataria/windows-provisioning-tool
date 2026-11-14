@@ -5,6 +5,7 @@ import tkinter.messagebox as msgbox
 from modules.runner import run_powershell, run_inline_powershell
 from modules.logger import log, log_change
 from modules.utils import format_size
+from ui.widgets import confirm_run, tip
 
 
 def _junk_categories(local_path):
@@ -137,20 +138,24 @@ class ProfilesSection(ctk.CTkFrame):
         self._refresh_btn = ctk.CTkButton(btn_row, text="Refresh List", width=110,
                                           command=self._refresh_list)
         self._refresh_btn.grid(row=0, column=0, padx=(4, 6))
+        tip(self._refresh_btn, "Reload the list of user profiles on this PC")
 
         self._scan_btn = ctk.CTkButton(btn_row, text="Scan Sizes", width=110,
                                        command=self._scan)
         self._scan_btn.grid(row=0, column=1, padx=6)
+        tip(self._scan_btn, "Measure reclaimable cache/temp space per profile. Nothing is deleted.")
 
         self._clean_btn = ctk.CTkButton(btn_row, text="Clean Selected", width=130,
                                         fg_color="#c0392b", hover_color="#922b21",
                                         command=self._clean)
         self._clean_btn.grid(row=0, column=2, padx=6)
+        tip(self._clean_btn, "Delete cache/temp junk from the ticked profiles (Ctrl+Enter). "
+                             "Documents and settings are not touched.")
 
-        ctk.CTkButton(btn_row, text="Select All", width=90,
-                      command=self._select_all).grid(row=0, column=3, padx=6)
-        ctk.CTkButton(btn_row, text="Select None", width=90,
-                      command=self._select_none).grid(row=0, column=4, padx=6)
+        tip(ctk.CTkButton(btn_row, text="Select All", width=90, command=self._select_all),
+            "Tick every profile (Ctrl+A)").grid(row=0, column=3, padx=6)
+        tip(ctk.CTkButton(btn_row, text="Select None", width=90, command=self._select_none),
+            "Untick every profile (Ctrl+Shift+A)").grid(row=0, column=4, padx=6)
 
         self._total_label = ctk.CTkLabel(hdr, text="Total selected: ---",
                                          font=ctk.CTkFont(size=12), text_color="gray")
@@ -221,6 +226,16 @@ class ProfilesSection(ctk.CTkFrame):
         for var in self._vars.values():
             var.set(False)
         self._update_total()
+
+    # Keyboard shortcuts (see ui/widgets.py)
+    def shortcut_select_all(self):
+        self._select_all()
+
+    def shortcut_deselect_all(self):
+        self._select_none()
+
+    def shortcut_apply(self):
+        self._clean()
 
     def _update_size_label(self, sid, val):
         lbl = self._size_labels.get(sid)
@@ -411,6 +426,21 @@ class ProfilesSection(ctk.CTkFrame):
         selected = [sid for sid, var in self._vars.items() if var.get()]
         if not selected:
             self._append("No profiles selected.")
+            return
+
+        def describe(sid):
+            p = self._profiles[sid]
+            sz = self._sizes.get(sid)
+            size = f"  ({format_size(sz)})" if sz is not None else ""
+            guarded = self._is_guarded(sid)
+            return (p["username"] + size + ("  [in use]" if guarded else ""), guarded)
+
+        if not confirm_run(self, "Clean these profiles?",
+                           f"Cache/temp junk will be deleted from {len(selected)} profile(s):",
+                           [describe(sid) for sid in selected],
+                           action_text=f"Clean {len(selected)} profile(s)", danger=True,
+                           footer="Profiles marked [in use] will ask for confirmation again."
+                                  if any(self._is_guarded(s) for s in selected) else None):
             return
 
         confirmed = []

@@ -1,6 +1,6 @@
 # IT Provisioning Tool — Task Tracker
 
-Last updated: 2026-11-12
+Last updated: 2026-11-14
 
 ---
 
@@ -22,8 +22,10 @@ Last updated: 2026-11-12
 
 ---
 
+## In Progress
+
 ### #12 — UI/UX improvements across all tabs
-**Status:** Pending  
+**Status:** In progress (part 1 done 2026-11-14)  
 **Details:**  
 - Select All / Deselect All buttons on every tab that has checkboxes (Debloat, Privacy, Cleanup, Security)
 - Undo/rollback section per tab — show last N actions with individual undo buttons
@@ -34,12 +36,13 @@ Last updated: 2026-11-12
 - Keyboard shortcuts (Select All = Ctrl+A, Apply = Ctrl+Enter)
 - Tooltips on all buttons explaining what they do
 - Responsive layout — panels resize cleanly on smaller screens
+**Part 1 done (2026-11-14):** shared helpers in `ui/widgets.py`
+- `confirm_run()` "here's what will run" dialog (Enter = run, Esc = cancel; risky items in red) before: Debloat remove + reinstall, Tweaks apply + undo (Advanced tweaks highlighted), Windows Cleanup clean, Profile cleanup. Security Fix All already had its own confirm dialog. The existing per-item [!] / in-use warnings still appear after it.
+- `tip()` tooltips on the top bar, Debloat, Tweaks, Cleanup (all 3 sections), Security, Threat Report buttons.
+- Shortcuts: Ctrl+A select all, Ctrl+Shift+A deselect all, Ctrl+Enter main action (apply / clean / scan) on the visible tab; the Cleanup hub forwards to its visible section; ignored while typing in a text field. Tabs opt in via `shortcut_*` methods.
+- Select All / Deselect All already existed on every checkbox tab.
+**Still to do:** undo history per tab, unified results dialog (collapse/expand), last-run + pass/fail badge on tab headers, progress feedback where missing, tooltips on System/Apps/Config/Users tabs, responsive layout.
 
----
-
-## In Progress
-
-*(none)*
 
 ---
 

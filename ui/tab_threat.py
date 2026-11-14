@@ -13,6 +13,7 @@ from modules.runner import run_encoded_powershell
 from modules.security_report import machine_meta, ordered
 from modules.threat_checks import APPROVED_ADMINS_FILE, COMPROMISE_CHECKS
 from modules.utils import writable_path
+from ui.widgets import tip
 
 _SEV_COLOR    = {"HIGH": "#c0392b", "MEDIUM": "#d35400", "LOW": "#7f8c8d"}
 _STATUS_COLOR = {"PASS": "#27ae60", "FAIL": "#e74c3c", "WARN": "#e67e22",
@@ -50,16 +51,19 @@ class ThreatTab(ctk.CTkFrame):
             top, text="Run Threat Scan", width=170,
             font=ctk.CTkFont(size=13, weight="bold"), command=self._run_scan)
         self._scan_btn.grid(row=0, column=0, padx=(14, 8), pady=10)
+        tip(self._scan_btn, "Look for signs of compromise and vulnerability exposure (Ctrl+Enter). Read-only, takes 1-3 minutes.")
 
         self._export_btn = ctk.CTkButton(
             top, text="Export Report", width=120, fg_color="transparent", border_width=1,
             state="disabled", command=self._export_report)
         self._export_btn.grid(row=0, column=1, padx=6, pady=10)
+        tip(self._export_btn, "Save the report as HTML and TXT in the logs folder")
 
         self._copy_btn = ctk.CTkButton(
             top, text="Copy Report", width=110, fg_color="transparent", border_width=1,
             state="disabled", command=self._copy_report)
         self._copy_btn.grid(row=0, column=2, padx=6, pady=10)
+        tip(self._copy_btn, "Copy the plain-text report to the clipboard (for tickets)")
 
         self._status_lbl = ctk.CTkLabel(
             top, text=f"{len(COMPROMISE_CHECKS)} compromise indicators + {len(sc.CHECKS)} "
@@ -79,6 +83,9 @@ class ThreatTab(ctk.CTkFrame):
         ).grid(row=0, column=0, pady=60)
 
     # ── Scan ───────────────────────────────────────────────────────
+
+    def shortcut_apply(self):
+        self._run_scan()
 
     def _run_scan(self):
         if self._running:

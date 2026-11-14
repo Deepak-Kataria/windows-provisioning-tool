@@ -5,6 +5,7 @@ import threading
 from collections import defaultdict
 from modules.runner import run_powershell
 from modules.logger import log
+from ui.widgets import confirm_run, tip
 
 CONFIG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config")
 
@@ -14,6 +15,7 @@ class DebloatTab(ctk.CTkFrame):
         super().__init__(master, fg_color="transparent")
         self.role = role
         self.checkboxes = {}
+        self.app_names = {}
         self.reinstall_checkboxes = {}
         self._running = False
         self._load_config()
@@ -40,10 +42,10 @@ class DebloatTab(ctk.CTkFrame):
 
         btn_frame = ctk.CTkFrame(header, fg_color="transparent")
         btn_frame.grid(row=2, column=0, padx=16, pady=(0, 12), sticky="w")
-        ctk.CTkButton(btn_frame, text="Select All", width=110,
-                       command=self._select_all).grid(row=0, column=0, padx=4)
-        ctk.CTkButton(btn_frame, text="Deselect All", width=110,
-                       command=self._deselect_all).grid(row=0, column=1, padx=4)
+        tip(ctk.CTkButton(btn_frame, text="Select All", width=110, command=self._select_all),
+            "Tick every app in the list (Ctrl+A)").grid(row=0, column=0, padx=4)
+        tip(ctk.CTkButton(btn_frame, text="Deselect All", width=110, command=self._deselect_all),
+            "Untick every app in the list (Ctrl+Shift+A)").grid(row=0, column=1, padx=4)
 
         # Scrollable app list grouped by category
         scroll = ctk.CTkScrollableFrame(self, height=240)
@@ -69,6 +71,7 @@ class DebloatTab(ctk.CTkFrame):
                 ctk.CTkCheckBox(scroll, text=app["name"], variable=var).grid(
                     row=row, column=col, sticky="w", padx=8, pady=2)
                 self.checkboxes[app["package"]] = var
+                self.app_names[app["package"]] = app["name"]
                 col += 1
                 if col == 3:
                     col = 0
@@ -80,6 +83,8 @@ class DebloatTab(ctk.CTkFrame):
                                          fg_color="#E53935", hover_color="#B71C1C",
                                          command=self._remove_apps)
         self.remove_btn.grid(row=2, column=0, padx=20, pady=(8, 2), sticky="w")
+        tip(self.remove_btn, "Uninstall the ticked apps for all users (Ctrl+Enter). "
+                             "You'll see the list before anything runs.")
 
         progress_frame = ctk.CTkFrame(self, fg_color="transparent")
         progress_frame.grid(row=3, column=0, padx=20, pady=(0, 4), sticky="ew")
@@ -127,12 +132,13 @@ class DebloatTab(ctk.CTkFrame):
                                             fg_color="#FF8F00", hover_color="#E65100",
                                             command=self._reinstall_apps)
         self.reinstall_btn.grid(row=0, column=0, padx=(0, 8))
-        ctk.CTkButton(rb_btn_row, text="Select All", width=90,
-                       command=lambda: [v.set(True) for v, _ in self.reinstall_checkboxes.values()]).grid(
-            row=0, column=1, padx=4)
-        ctk.CTkButton(rb_btn_row, text="Deselect All", width=90,
-                       command=lambda: [v.set(False) for v, _ in self.reinstall_checkboxes.values()]).grid(
-            row=0, column=2, padx=4)
+        tip(self.reinstall_btn, "Reinstall the ticked apps from the Microsoft Store using winget")
+        tip(ctk.CTkButton(rb_btn_row, text="Select All", width=90,
+                          command=lambda: [v.set(True) for v, _ in self.reinstall_checkboxes.values()]),
+            "Tick every app in the reinstall list").grid(row=0, column=1, padx=4)
+        tip(ctk.CTkButton(rb_btn_row, text="Deselect All", width=90,
+                          command=lambda: [v.set(False) for v, _ in self.reinstall_checkboxes.values()]),
+            "Untick every app in the reinstall list").grid(row=0, column=2, padx=4)
 
         rb_prog = ctk.CTkFrame(rb_card, fg_color="transparent")
         rb_prog.grid(row=4, column=0, padx=16, pady=(0, 12), sticky="ew")
@@ -160,6 +166,13 @@ class DebloatTab(ctk.CTkFrame):
     def _deselect_all(self):
         for var in self.checkboxes.values():
             var.set(False)
+
+    # Keyboard shortcuts (see ui/widgets.py)
+    shortcut_select_all = _select_all
+    shortcut_deselect_all = _deselect_all
+
+    def shortcut_apply(self):
+        self._remove_apps()
 
     def _append_output(self, text):
         self.output_box.configure(state="normal")
@@ -197,6 +210,12 @@ class DebloatTab(ctk.CTkFrame):
         selected = [pkg for pkg, var in self.checkboxes.items() if var.get()]
         if not selected:
             self._append_output("No apps selected.")
+            return
+        if not confirm_run(self, "Remove apps?",
+                           f"These {len(selected)} app(s) will be uninstalled for all users:",
+                           [self.app_names.get(p, p) for p in selected],
+                           action_text=f"Remove {len(selected)} app(s)", danger=True,
+                           footer="You can reinstall them later from the Rollback section."):
             return
 
         self._running = True
@@ -261,6 +280,11 @@ class DebloatTab(ctk.CTkFrame):
                     for pkg, (var, name) in self.reinstall_checkboxes.items() if var.get()]
         if not selected:
             self._append_output("No apps selected for reinstall.")
+            return
+        if not confirm_run(self, "Reinstall apps?",
+                           f"These {len(selected)} app(s) will be reinstalled via winget:",
+                           [a["name"] for a in selected],
+                           action_text=f"Reinstall {len(selected)} app(s)"):
             return
 
         self._running = True

@@ -10,6 +10,7 @@ from modules.logger import log, log_change
 from modules.runner import run_encoded_powershell
 from modules.security_report import build_html, build_text, machine_meta, ordered_checks
 from modules.utils import writable_path
+from ui.widgets import tip
 
 CHECKS = sc.CHECKS  # kept for any external imports
 
@@ -52,16 +53,19 @@ class SecurityTab(ctk.CTkFrame):
             top, text="Run Vulnerability Scan", width=190,
             font=ctk.CTkFont(size=13, weight="bold"), command=self._run_scan)
         self._scan_btn.grid(row=0, column=0, padx=(14, 8), pady=10)
+        tip(self._scan_btn, "Run all vulnerability checks (Ctrl+Enter). Read-only, nothing is changed.")
 
         self._export_btn = ctk.CTkButton(
             top, text="Export Report", width=120, fg_color="transparent", border_width=1,
             state="disabled", command=self._export_report)
         self._export_btn.grid(row=0, column=1, padx=6, pady=10)
+        tip(self._export_btn, "Save the report as HTML and TXT in the logs folder")
 
         self._copy_btn = ctk.CTkButton(
             top, text="Copy Report", width=110, fg_color="transparent", border_width=1,
             state="disabled", command=self._copy_report)
         self._copy_btn.grid(row=0, column=2, padx=6, pady=10)
+        tip(self._copy_btn, "Copy the plain-text report to the clipboard (for tickets)")
 
         self._status_lbl = ctk.CTkLabel(
             top, text=f"Click 'Run Vulnerability Scan' to start ({len(CHECKS)} checks).",
@@ -288,6 +292,9 @@ class SecurityTab(ctk.CTkFrame):
             text_color=color)
 
     # ── Scan ───────────────────────────────────────────────────────
+
+    def shortcut_apply(self):
+        self._run_scan()
 
     def _run_scan(self):
         if self._running:

@@ -10,6 +10,7 @@ from ui.tab_cleanup import CleanupTab
 from ui.tab_security import SecurityTab
 from ui.tab_threat import ThreatTab
 from ui.tab_users import UsersTab
+from ui.widgets import install_shortcuts, tip
 
 APP_VERSION = "v1.3.0"
 
@@ -47,6 +48,7 @@ class Dashboard(ctk.CTkFrame):
             hover_color=("#2a2a2a", "#1a1a1a"),
             width=60, height=22,
             command=self._show_changelog)
+        tip(ver_btn, "Show the changelog")
         ver_btn.grid(row=0, column=1, padx=(6, 0), sticky="w")
 
         role_badge = "ADMIN" if self.role == "admin" else "USER"
@@ -58,10 +60,10 @@ class Dashboard(ctk.CTkFrame):
                       corner_radius=6,
                       text_color="white").grid(row=0, column=1, padx=8, sticky="e")
 
-        ctk.CTkButton(topbar, text="Logout", width=80, height=30,
-                       fg_color="transparent", border_width=1,
-                       command=self.on_logout).grid(
-            row=0, column=2, padx=16, pady=10)
+        tip(ctk.CTkButton(topbar, text="Logout", width=80, height=30,
+                          fg_color="transparent", border_width=1,
+                          command=self.on_logout),
+            "Log out and return to the login screen").grid(row=0, column=2, padx=16, pady=10)
 
         # Tabs
         tabs = ctk.CTkTabview(self)
@@ -82,6 +84,7 @@ class Dashboard(ctk.CTkFrame):
         admin_only = {"System", "Debloat", "Tweaks", "Config", "Cleanup", "Security",
                       "Threat Report", "Users"}
 
+        self._tab_widgets = {}
         for tab_name, TabClass in tab_definitions:
             if tab_name in admin_only and self.role != "admin":
                 continue
@@ -90,6 +93,10 @@ class Dashboard(ctk.CTkFrame):
             tab.grid_columnconfigure(0, weight=1)
             widget = TabClass(tab, self.role)
             widget.grid(row=0, column=0, sticky="nsew")
+            self._tab_widgets[tab_name] = widget
+
+        # Ctrl+A / Ctrl+Shift+A / Ctrl+Enter go to whichever tab is visible
+        install_shortcuts(self, lambda: self._tab_widgets.get(tabs.get()))
 
     def _show_changelog(self):
         changelog_path = os.path.join(get_base_dir(), "CHANGELOG.md")

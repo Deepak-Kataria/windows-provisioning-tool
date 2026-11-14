@@ -4,6 +4,7 @@ import tkinter.messagebox as msgbox
 from modules.runner import run_powershell, run_inline_powershell
 from modules.logger import log
 from modules.utils import format_size
+from ui.widgets import tip
 
 HEALTH_COLORS = {
     "Healthy": "#2ecc71",
@@ -44,6 +45,7 @@ class DiskAnalysisSection(ctk.CTkFrame):
         self._refresh_drives_btn = ctk.CTkButton(top_row, text="Refresh", width=90,
                                                   command=self._load_drives)
         self._refresh_drives_btn.grid(row=0, column=1, sticky="e")
+        tip(self._refresh_drives_btn, "Reload drive list and free space")
 
         self._drives_card = ctk.CTkFrame(wrap, corner_radius=6)
         self._drives_card.grid(row=1, column=0, padx=10, pady=(0, 10), sticky="ew")
@@ -75,13 +77,15 @@ class DiskAnalysisSection(ctk.CTkFrame):
         self._path_entry = ctk.CTkEntry(path_row, placeholder_text="Path")
         self._path_entry.grid(row=0, column=2, padx=(0, 6), sticky="ew")
 
-        ctk.CTkButton(path_row, text="Up", width=50,
-                      command=self._go_up).grid(row=0, column=3, padx=3)
-        ctk.CTkButton(path_row, text="Go", width=50,
-                      command=self._go_path).grid(row=0, column=4, padx=3)
+        tip(ctk.CTkButton(path_row, text="Up", width=50, command=self._go_up),
+            "Go to the parent folder").grid(row=0, column=3, padx=3)
+        tip(ctk.CTkButton(path_row, text="Go", width=50, command=self._go_path),
+            "Open the path typed in the box").grid(row=0, column=4, padx=3)
         self._scan_folder_btn = ctk.CTkButton(path_row, text="Scan This Folder", width=140,
                                               command=self._scan_folder)
         self._scan_folder_btn.grid(row=0, column=5, padx=(6, 4))
+        tip(self._scan_folder_btn, "Size every subfolder of the current path, largest first "
+                                   "(Ctrl+Enter). Read-only.")
 
         self._folder_card = ctk.CTkFrame(wrap, corner_radius=6)
         self._folder_card.grid(row=3, column=0, padx=10, pady=(0, 10), sticky="ew")
@@ -222,6 +226,9 @@ class DiskAnalysisSection(ctk.CTkFrame):
             return
         self._current_path = path if path.endswith("\\") else path + "\\"
         self._clear_folder_rows()
+
+    def shortcut_apply(self):
+        self._scan_folder()
 
     def _go_up(self):
         if not self._current_path:

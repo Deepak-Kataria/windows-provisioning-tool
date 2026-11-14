@@ -4,6 +4,7 @@ import tkinter.messagebox as msgbox
 from modules.runner import run_inline_powershell
 from modules.logger import log
 from modules.utils import format_size
+from ui.widgets import confirm_run, tip
 
 
 GROUPS = [
@@ -718,16 +719,19 @@ class WindowsCleanupSection(ctk.CTkFrame):
         self._scan_btn = ctk.CTkButton(btn_row, text="Scan Sizes", width=110,
                                        command=self._scan)
         self._scan_btn.grid(row=0, column=0, padx=(4, 6))
+        tip(self._scan_btn, "Measure how much space each location uses. Nothing is deleted.")
 
         self._clean_btn = ctk.CTkButton(btn_row, text="Clean Selected", width=130,
                                         fg_color="#c0392b", hover_color="#922b21",
                                         command=self._clean)
         self._clean_btn.grid(row=0, column=1, padx=6)
+        tip(self._clean_btn, "Delete the contents of the ticked locations (Ctrl+Enter). "
+                             "You'll see the list before anything runs.")
 
-        ctk.CTkButton(btn_row, text="Select All", width=90,
-                      command=self._select_all).grid(row=0, column=2, padx=6)
-        ctk.CTkButton(btn_row, text="Select None", width=90,
-                      command=self._select_none).grid(row=0, column=3, padx=6)
+        tip(ctk.CTkButton(btn_row, text="Select All", width=90, command=self._select_all),
+            "Tick every location (Ctrl+A)").grid(row=0, column=2, padx=6)
+        tip(ctk.CTkButton(btn_row, text="Select None", width=90, command=self._select_none),
+            "Untick every location (Ctrl+Shift+A)").grid(row=0, column=3, padx=6)
 
         self._total_label = ctk.CTkLabel(hdr, text="Total selected: ---",
                                          font=ctk.CTkFont(size=12), text_color="gray")
@@ -837,6 +841,16 @@ class WindowsCleanupSection(ctk.CTkFrame):
         for var in self._vars.values():
             var.set(False)
 
+    # Keyboard shortcuts (see ui/widgets.py)
+    def shortcut_select_all(self):
+        self._select_all()
+
+    def shortcut_deselect_all(self):
+        self._select_none()
+
+    def shortcut_apply(self):
+        self._clean()
+
     def _group_select(self, grp, value):
         for loc in grp["items"]:
             self._vars[loc["id"]].set(value)
@@ -887,6 +901,20 @@ class WindowsCleanupSection(ctk.CTkFrame):
         selected = [loc for loc in LOCATIONS if self._vars[loc["id"]].get()]
         if not selected:
             self._append("No locations selected.")
+            return
+
+        def describe(loc):
+            sz = self._sizes.get(loc["id"])
+            size = f"  ({format_size(sz)})" if sz is not None else ""
+            return (loc["label"] + size + ("  [!]" if loc.get("confirm") else ""),
+                    bool(loc.get("confirm")))
+
+        if not confirm_run(self, "Clean these locations?",
+                           f"The contents of these {len(selected)} location(s) will be deleted:",
+                           [describe(loc) for loc in selected],
+                           action_text=f"Clean {len(selected)} location(s)", danger=True,
+                           footer="Items marked [!] will ask for confirmation again individually."
+                                  if any(l.get("confirm") for l in selected) else None):
             return
 
         confirmed = []

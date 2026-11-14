@@ -4,6 +4,7 @@ import os
 import threading
 from modules.runner import run_inline_powershell
 from modules.logger import log
+from ui.widgets import confirm_run, tip
 
 CONFIG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config")
 
@@ -66,12 +67,12 @@ class TweaksTab(ctk.CTkFrame):
         # Select All / None buttons
         btn_row = ctk.CTkFrame(left, fg_color="transparent")
         btn_row.grid(row=row, column=0, sticky="w", padx=8, pady=(10, 4))
-        ctk.CTkButton(btn_row, text="Select All", width=100,
-                       command=lambda: [v.set(True) for v in self._tweak_vars.values()]).grid(
-            row=0, column=0, padx=(0, 6))
-        ctk.CTkButton(btn_row, text="Deselect All", width=100,
-                       command=lambda: [v.set(False) for v in self._tweak_vars.values()]).grid(
-            row=0, column=1)
+        tip(ctk.CTkButton(btn_row, text="Select All", width=100,
+                          command=self.shortcut_select_all),
+            "Tick every tweak, including Advanced ones (Ctrl+A)").grid(row=0, column=0, padx=(0, 6))
+        tip(ctk.CTkButton(btn_row, text="Deselect All", width=100,
+                          command=self.shortcut_deselect_all),
+            "Untick every tweak (Ctrl+Shift+A)").grid(row=0, column=1)
 
         # ── Right: Preferences + Performance ──────────────────────
         right = ctk.CTkScrollableFrame(self, fg_color="transparent")
@@ -87,14 +88,17 @@ class TweaksTab(ctk.CTkFrame):
         prow += 1
         perf = self._config["performance"]
 
-        ctk.CTkButton(right, text="Enable Ultimate Performance",
-                       fg_color="#2e7d32", hover_color="#1b5e20",
-                       command=lambda: self._run_perf(perf["enable_cmd"], "Enable Ultimate Performance")).grid(
+        tip(ctk.CTkButton(right, text="Enable Ultimate Performance",
+                          fg_color="#2e7d32", hover_color="#1b5e20",
+                          command=lambda: self._run_perf(perf["enable_cmd"], "Enable Ultimate Performance")),
+            "Add and activate the Ultimate Performance power plan "
+            "(higher power use, best for desktops)").grid(
             row=prow, column=0, padx=12, pady=(6, 3), sticky="ew")
         prow += 1
-        ctk.CTkButton(right, text="Disable / Use Balanced Plan",
-                       fg_color="#555555", hover_color="#333333",
-                       command=lambda: self._run_perf(perf["disable_cmd"], "Set Balanced Plan")).grid(
+        tip(ctk.CTkButton(right, text="Disable / Use Balanced Plan",
+                          fg_color="#555555", hover_color="#333333",
+                          command=lambda: self._run_perf(perf["disable_cmd"], "Set Balanced Plan")),
+            "Switch back to the Windows Balanced power plan").grid(
             row=prow, column=0, padx=12, pady=(3, 8), sticky="ew")
 
         # ── Bottom: Description ────────────────────────────────────
@@ -115,15 +119,30 @@ class TweaksTab(ctk.CTkFrame):
         self._apply_btn = ctk.CTkButton(action_frame, text="Apply Selected Tweaks",
                                          width=180, command=self._apply_tweaks)
         self._apply_btn.grid(row=0, column=0, padx=(0, 8))
+        tip(self._apply_btn, "Apply the ticked tweaks (Ctrl+Enter). "
+                             "You'll see the list before anything runs.")
 
         self._undo_btn = ctk.CTkButton(action_frame, text="Undo Selected Tweaks",
                                         width=180, fg_color="#FF8F00", hover_color="#E65100",
                                         command=self._undo_tweaks)
         self._undo_btn.grid(row=0, column=1)
+        tip(self._undo_btn, "Revert the ticked tweaks to Windows defaults")
 
         self._status_label = ctk.CTkLabel(action_frame, text="",
                                            font=ctk.CTkFont(size=11), text_color="gray", anchor="w")
         self._status_label.grid(row=0, column=3, padx=16, sticky="w")
+
+    # Keyboard shortcuts (see ui/widgets.py)
+    def shortcut_select_all(self):
+        for v in self._tweak_vars.values():
+            v.set(True)
+
+    def shortcut_deselect_all(self):
+        for v in self._tweak_vars.values():
+            v.set(False)
+
+    def shortcut_apply(self):
+        self._apply_tweaks()
 
     def _section_label(self, parent, text, row, color="white"):
         ctk.CTkLabel(parent, text=text,
@@ -223,6 +242,19 @@ class TweaksTab(ctk.CTkFrame):
 
     def _run_tweaks(self, selected, mode):
         if self._running:
+            return
+        advanced = {t["id"] for t in self._config["advanced"]}
+        has_adv = any(tid in advanced for tid, _ in selected)
+        verb = "applied" if mode == "apply" else "reverted"
+        if not confirm_run(
+                self, "Apply tweaks?" if mode == "apply" else "Undo tweaks?",
+                f"These {len(selected)} tweak(s) will be {verb}:",
+                [(t["name"] + ("  (Advanced)" if tid in advanced else ""), tid in advanced)
+                 for tid, t in selected],
+                action_text=f"{'Apply' if mode == 'apply' else 'Undo'} {len(selected)} tweak(s)",
+                danger=has_adv,
+                footer="Advanced tweaks are shown in red. Make sure you've read their descriptions."
+                       if has_adv else None):
             return
         self._running = True
         self._apply_btn.configure(state="disabled")
