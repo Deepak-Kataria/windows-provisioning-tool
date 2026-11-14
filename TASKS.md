@@ -50,7 +50,16 @@ Last updated: 2026-11-14
 - Security + Threat Report: summary is a row of stat tiles (risk / score / failed / warnings / passed; overall / compromise / exposure / flagged) + mono host/scan strip; denser rows with mono PASS/FAIL + severity columns, mono detail text, real alternating row colours; all hardcoded hex replaced with theme tokens.
 - Layout direction chosen 2026-11-14: **Good One + Command Center** (compared 7 mock-ups: Good One, Command Center, Split View, Setup Wizard, Compact Ribbon, Triage Board, Task Queue Console).
 - `ui/tab_home.py` Home page (OVERVIEW group, Ctrl+0, opens on start): cards for Security / Threats (from in-session scan results), Disk C:, Bloatware (debloat list vs installed Appx, background), Profiles (stale = 90+ days, background), System (uptime + pending restart via registry); recent actions from changes.log; Refresh button / Ctrl+Enter. Dashboard calls `attach_shell()` and `on_show()` on pages that define them.
-**Still to do:** per-tab polish for the remaining tabs (Debloat, Apps, Tweaks, Config, Cleanup, System, Users: denser lists, mono data columns), login screen restyle (login is currently disabled), undo history per tab, unified results dialog (collapse/expand), last-run + pass/fail badge on tab headers, progress feedback where missing, tooltips on System/Apps/Config/Users tabs, responsive layout.
+- All remaining tabs redesigned to Good One after mock-up approval (2026-11-14), each showing live state from this PC:
+  - Users: account table, per-row Reset password / Delete (confirm), YOU tag, last admin protected, created date.
+  - Debloat: INSTALLED / NOT PRESENT via Appx, Remove/Reinstall switch, installed-only filter, search.
+  - Tweaks: APPLIED / NOT SET from the registry (`modules/reg_state.py`), descriptions inline, CAUTION tags, power plan switch.
+  - Apps: one table (Common/Team/Local), INSTALLED <version> via registry + background `winget export` (`modules/installed_apps.py`).
+  - Config: feature ENABLED status, fixes with duration + DISRUPTIVE tag and a confirm step (they ran on click before), panel tiles.
+  - Cleanup: hub tiles (reclaimable, disk, profiles, selected), profile table with IN USE / STALE, CAN'T UNDO tags.
+  - System: hardware tiles load automatically, compact rename card with large preview, domain credentials only when joined.
+  - Shared widgets: `ActionBar`, `LogDrawer`, `StatTile` (auto-shrinks long values), tooltips on segmented buttons.
+**Still to do:** login screen restyle (login is currently disabled), undo history per tab, unified results dialog (collapse/expand), last-run + pass/fail badge on tab headers, progress feedback where missing, tooltips on System/Apps/Config/Users tabs, responsive layout.
 
 
 ---

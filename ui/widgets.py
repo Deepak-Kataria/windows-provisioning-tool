@@ -29,8 +29,11 @@ class StatTile(ctk.CTkFrame):
 
     def set(self, value, color=None, sub=""):
         color = color or T.TEXT_BRIGHT
+        text = str(value)
         self._bar.configure(fg_color=color)
-        self._value.configure(text=str(value), text_color=color)
+        # long values (models, plan names) step down so they fit narrow tiles
+        size = 24 if len(text) <= 9 else 20 if len(text) <= 12 else 17
+        self._value.configure(text=text, text_color=color, font=T.mono(size, "bold"))
         self._sub.configure(text=sub or " ")
 
 
