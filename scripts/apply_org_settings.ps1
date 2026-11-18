@@ -12,26 +12,39 @@ function Set-RegValue {
     Set-ItemProperty -Path $Path -Name $Name -Value $Value -Type $Type -Force
 }
 
-if ($Mode -eq "restore") {
-    foreach ($tweak in $settings) {
-        try {
-            if ($tweak.rollback_delete) {
-                Remove-ItemProperty -Path $tweak.key -Name $tweak.value_name -ErrorAction SilentlyContinue
+function Set-LocalSecPolicy {
+    param([string]$Key, [string]$Value)
+    $f  = "$env:TEMP\scp_$PID.inf"
+    $db = "$env:TEMP\scp_$PID.sdb"
+    "[Unicode]`r`nUnicode=yes`r`n[System Access]`r`n$Key = $Value" | Out-File $f -Encoding unicode
+    secedit /configure /db $db /cfg $f /quiet
+    Remove-Item $f,$db -ErrorAction SilentlyContinue
+}
+
+foreach ($tweak in $settings) {
+    try {
+        if ($tweak.type -eq "command") {
+            if ($Mode -eq "restore") {
+                if ($tweak.rollback_cmd) { Invoke-Expression $tweak.rollback_cmd }
+                Write-Output "RESTORED: $($tweak.name)"
             } else {
-                Set-RegValue $tweak.key $tweak.value_name $tweak.rollback_data $tweak.value_type
+                Invoke-Expression $tweak.apply_cmd
+                Write-Output "APPLIED: $($tweak.name)"
             }
-            Write-Output "RESTORED: $($tweak.name)"
-        } catch {
-            Write-Output "ERROR: $($tweak.name) - $($_.Exception.Message)"
+        } else {
+            if ($Mode -eq "restore") {
+                if ($tweak.rollback_delete) {
+                    Remove-ItemProperty -Path $tweak.key -Name $tweak.value_name -ErrorAction SilentlyContinue
+                } else {
+                    Set-RegValue $tweak.key $tweak.value_name $tweak.rollback_data $tweak.value_type
+                }
+                Write-Output "RESTORED: $($tweak.name)"
+            } else {
+                Set-RegValue $tweak.key $tweak.value_name $tweak.value_data $tweak.value_type
+                Write-Output "APPLIED: $($tweak.name)"
+            }
         }
-    }
-} else {
-    foreach ($tweak in $settings) {
-        try {
-            Set-RegValue $tweak.key $tweak.value_name $tweak.value_data $tweak.value_type
-            Write-Output "APPLIED: $($tweak.name)"
-        } catch {
-            Write-Output "ERROR: $($tweak.name) - $($_.Exception.Message)"
-        }
+    } catch {
+        Write-Output "ERROR: $($tweak.name) - $($_.Exception.Message)"
     }
 }

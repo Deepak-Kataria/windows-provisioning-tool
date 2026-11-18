@@ -10,10 +10,19 @@ $Password = [Console]::In.ReadLine()
 
 $ldapTarget = if ($ServerIP -ne "") { $ServerIP } else { $DomainName }
 
+# Use username as-is if it already contains domain (DOMAIN\user or user@domain),
+# otherwise prefix with NetBIOS domain name (part before first dot)
+$EffectiveUser = if ($Username -match '\\|@') {
+    $Username
+} else {
+    $netbios = $DomainName.Split('.')[0].ToUpper()
+    "$netbios\$Username"
+}
+
 try {
     $entry = New-Object System.DirectoryServices.DirectoryEntry(
         "LDAP://$ldapTarget",
-        "$DomainName\$Username",
+        $EffectiveUser,
         $Password
     )
     $searcher = New-Object System.DirectoryServices.DirectorySearcher($entry)

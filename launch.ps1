@@ -71,25 +71,55 @@ if (-not $PythonExe) {
     }
 }
 
-Write-Host "Python: $PythonExe"
+# ── MODE 1: Dev mode - Python found, run from source ─────────────────────────
+if ($PythonExe) {
+    Write-Host "Python found: $PythonExe"
+    Write-Host "Running from source (dev mode)..."
 
-if (-not $PythonExe) {
-    Write-Host ""
-    Write-Host "ERROR: No built exe and no Python found."
-    Write-Host "Option 1: Run build.bat to create the standalone exe."
-    Write-Host "Option 2: Install Python from https://python.org"
-    Read-Host "Press Enter to exit"
-    exit 1
+    $RunDir = $ScriptDir
+
+    # If on UNC, copy source to local temp
+    if ($ScriptDir -like "\\*") {
+        Write-Host "Network share detected. Copying to local temp..."
+        $RunDir = Join-Path $env:TEMP "IT-Provisioning-Tool-src"
+        robocopy $ScriptDir $RunDir /E /NFL /NDL /NJH /NJS /NC /NS /NP | Out-Null
+        Write-Host "Running from: $RunDir"
+    }
+
+    # Elevate if not admin
+    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+        [Security.Principal.WindowsBuiltInRole]::Administrator)
+
+    if (-not $isAdmin) {
+        Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
+        exit
+    }
+
+    # Install dependencies
+    $ReqFile = Join-Path $RunDir "requirements.txt"
+    if (Test-Path $ReqFile) {
+        Write-Host "Installing dependencies..."
+        & $PythonExe -m pip install -r $ReqFile --quiet --disable-pip-version-check
+        Write-Host "Done."
+    }
+
+    Set-Location $RunDir
+    & $PythonExe main.py
+    exit
 }
 
-# Install dependencies
-$ReqFile = Join-Path $RunDir "requirements.txt"
-if (Test-Path $ReqFile) {
-    Write-Host "Installing dependencies..."
-    & $PythonExe -m pip install -r $ReqFile --quiet --disable-pip-version-check
-    Write-Host "Done."
+# ── MODE 2: No Python - run built exe ────────────────────────────────────────
+$ExePath = Join-Path $ScriptDir "dist\IT-Provisioning-Tool.exe"
+if (Test-Path $ExePath) {
+    Write-Host "No Python found. Launching IT-Provisioning-Tool.exe..."
+    Start-Process $ExePath
+    exit
 }
 
-# Launch from source
-Set-Location $RunDir
-& $PythonExe main.py
+# ── Neither available ─────────────────────────────────────────────────────────
+Write-Host ""
+Write-Host "ERROR: No built exe and no Python found."
+Write-Host "Option 1: Run build.bat to create the standalone exe."
+Write-Host "Option 2: Install Python from https://python.org"
+Read-Host "Press Enter to exit"
+exit 1

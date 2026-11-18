@@ -59,9 +59,17 @@ class TelemetryTab(ctk.CTkFrame):
                 row=0, column=1, sticky="w", padx=16)
             self.apply_vars[key] = var
 
-        self.apply_btn = ctk.CTkButton(apply_card, text="Apply Privacy Settings",
-                                        command=self._apply)
-        self.apply_btn.grid(row=3, column=0, padx=20, pady=(0, 10), sticky="w")
+        apply_btn_row = ctk.CTkFrame(apply_card, fg_color="transparent")
+        apply_btn_row.grid(row=3, column=0, padx=20, pady=(0, 10), sticky="w")
+        self.apply_btn = ctk.CTkButton(apply_btn_row, text="Apply Privacy Settings",
+                                       command=self._apply)
+        self.apply_btn.grid(row=0, column=0, padx=(0, 8))
+        ctk.CTkButton(apply_btn_row, text="Select All", width=90,
+                      command=lambda: [v.set(True) for v in self.apply_vars.values()]).grid(
+            row=0, column=1, padx=4)
+        ctk.CTkButton(apply_btn_row, text="Deselect All", width=90,
+                      command=lambda: [v.set(False) for v in self.apply_vars.values()]).grid(
+            row=0, column=2, padx=4)
 
         # Progress
         prog_frame = ctk.CTkFrame(apply_card, fg_color="transparent")
@@ -136,15 +144,19 @@ class TelemetryTab(ctk.CTkFrame):
     def _show_done_dialog(self, title, body):
         dialog = ctk.CTkToplevel(self)
         dialog.title(title)
-        dialog.geometry("340x160")
+        dialog.geometry("340x190")
         dialog.resizable(False, False)
         dialog.grab_set()
         dialog.lift()
         dialog.focus_force()
         ctk.CTkLabel(dialog, text=title,
                       font=ctk.CTkFont(size=15, weight="bold")).pack(pady=(22, 8))
-        ctk.CTkLabel(dialog, text=body, font=ctk.CTkFont(size=13)).pack(pady=(0, 14))
-        ctk.CTkButton(dialog, text="OK", width=90, command=dialog.destroy).pack()
+        ctk.CTkLabel(dialog, text=body, font=ctk.CTkFont(size=13)).pack(pady=(0, 12))
+        btn_row = ctk.CTkFrame(dialog, fg_color="transparent")
+        btn_row.pack(pady=(0, 14))
+        ctk.CTkButton(btn_row, text="OK", width=90, command=dialog.destroy).grid(row=0, column=0, padx=6)
+        ctk.CTkButton(btn_row, text="Copy", width=80, fg_color="transparent", border_width=1,
+                      command=lambda: (dialog.clipboard_clear(), dialog.clipboard_append(f"{title}\n\n{body}"))).grid(row=0, column=1, padx=6)
 
     def _build_args(self, var_dict, mode):
         flag_map = {opt[0]: opt[4] for opt in TELEMETRY_OPTIONS}

@@ -4,40 +4,47 @@ param(
 )
 
 $PackageList = $Packages -split ','
+$LogFile = "$env:TEMP\debloat_log_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
+"Debloat run: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" | Out-File $LogFile -Encoding utf8
+
+Write-Output "LOG: Saving removal log to $LogFile"
 
 foreach ($pkg in $PackageList) {
     $pkg = $pkg.Trim()
     $removed = $false
 
-    # Current user
-    Get-AppxPackage -Name $pkg -ErrorAction SilentlyContinue | ForEach-Object {
+    # All users (works when elevated; catches packages not visible in admin context)
+    $found = Get-AppxPackage -AllUsers -Name $pkg -ErrorAction SilentlyContinue
+    foreach ($item in $found) {
         try {
-            Remove-AppxPackage -Package $_.PackageFullName -ErrorAction Stop
+            Remove-AppxPackage -Package $item.PackageFullName -AllUsers -ErrorAction Stop
             $removed = $true
-        } catch {}
-    }
-
-    # All users
-    Get-AppxPackage -AllUsers -Name $pkg -ErrorAction SilentlyContinue | ForEach-Object {
-        try {
-            Remove-AppxPackage -Package $_.PackageFullName -AllUsers -ErrorAction Stop
-            $removed = $true
-        } catch {}
-    }
-
-    # Provisioned — prevents reinstall for new user profiles
-    Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue |
-        Where-Object { $_.DisplayName -like $pkg } |
-        ForEach-Object {
+        } catch {
+            # Try without -AllUsers as fallback
             try {
-                Remove-AppxProvisionedPackage -Online -PackageName $_.PackageName -ErrorAction Stop | Out-Null
+                Remove-AppxPackage -Package $item.PackageFullName -ErrorAction Stop
                 $removed = $true
             } catch {}
         }
+    }
+
+    # Provisioned packages (prevents reinstall on new user profiles)
+    $provisioned = Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue |
+        Where-Object { $_.DisplayName -like $pkg }
+    foreach ($item in $provisioned) {
+        try {
+            Remove-AppxProvisionedPackage -Online -PackageName $item.PackageName -ErrorAction Stop | Out-Null
+            $removed = $true
+        } catch {}
+    }
 
     if ($removed) {
-        Write-Output "REMOVED: $pkg"
+        $msg = "REMOVED: $pkg"
     } else {
-        Write-Output "NOT_FOUND: $pkg"
+        $msg = "NOT_FOUND: $pkg"
     }
+    Write-Output $msg
+    $msg | Out-File $LogFile -Append -Encoding utf8
 }
+
+"Completed: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" | Out-File $LogFile -Append -Encoding utf8

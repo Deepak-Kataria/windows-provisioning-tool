@@ -1,5 +1,5 @@
 {
-    "registry_tweaks": [
+    "tweaks": [
         {
             "name": "Disable Auto-Restart After Updates",
             "description": "Prevents Windows from auto-restarting after updates without user consent",
@@ -46,6 +46,55 @@
             "value_data": 0,
             "value_type": "DWORD",
             "rollback_delete": true
+        },
+        {
+            "name": "Password Never Expires",
+            "description": "Sets Local Security Policy max password age to 0 (reflected in gpedit) and marks all enabled local accounts as never expire",
+            "type": "command",
+            "apply_cmd": "Set-LocalSecPolicy MaximumPasswordAge 0; Get-LocalUser | Where-Object {$_.Enabled} | ForEach-Object { Set-LocalUser -Name $_.Name -PasswordNeverExpires $true -ErrorAction SilentlyContinue }",
+            "rollback_cmd": "Set-LocalSecPolicy MaximumPasswordAge 42; Get-LocalUser | Where-Object {$_.Enabled} | ForEach-Object { Set-LocalUser -Name $_.Name -PasswordNeverExpires $false -ErrorAction SilentlyContinue }"
+        },
+        {
+            "name": "Account Lockout Disabled",
+            "description": "Sets Local Security Policy lockout threshold to 0 (reflected in gpedit) - accounts never lock on failed password attempts from network or local logon",
+            "type": "command",
+            "apply_cmd": "Set-LocalSecPolicy LockoutBadCount 0",
+            "rollback_cmd": "Set-LocalSecPolicy LockoutBadCount 10"
+        },
+        {
+            "name": "Power - Display and Disk Never Off",
+            "description": "Sets monitor and hard disk timeouts to Never on both AC and battery power",
+            "type": "command",
+            "apply_cmd": "powercfg /change monitor-timeout-ac 0; powercfg /change monitor-timeout-dc 0; powercfg /change disk-timeout-ac 0; powercfg /change disk-timeout-dc 0",
+            "rollback_cmd": "powercfg /change monitor-timeout-ac 15; powercfg /change monitor-timeout-dc 5; powercfg /change disk-timeout-ac 20; powercfg /change disk-timeout-dc 10"
+        },
+        {
+            "name": "Lid Close - Do Nothing",
+            "description": "Lid close action set to Do Nothing on both AC and battery - no sleep, hibernate, or shutdown on lid close",
+            "type": "command",
+            "apply_cmd": "powercfg /setacvalueindex SCHEME_CURRENT SUB_SLEEP LIDACTION 0; powercfg /setdcvalueindex SCHEME_CURRENT SUB_SLEEP LIDACTION 0; powercfg /setactive SCHEME_CURRENT",
+            "rollback_cmd": "powercfg /setacvalueindex SCHEME_CURRENT SUB_SLEEP LIDACTION 1; powercfg /setdcvalueindex SCHEME_CURRENT SUB_SLEEP LIDACTION 1; powercfg /setactive SCHEME_CURRENT"
+        },
+        {
+            "name": "Delivery Optimization - LAN Only",
+            "description": "Windows Update delivery optimization peers with local network devices only - no internet peer sharing",
+            "type": "registry",
+            "key": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeliveryOptimization",
+            "value_name": "DODownloadMode",
+            "value_data": 1,
+            "value_type": "DWORD",
+            "rollback_delete": true
+        },
+        {
+            "name": "This PC Icon on Desktop",
+            "description": "Shows This PC icon on the desktop (via Themes desktop icon settings) - takes effect after sign out or Explorer restart",
+            "type": "registry",
+            "key": "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\HideDesktopIcons\\NewStartPanel",
+            "value_name": "{20D04FE0-3AEA-1069-A2D8-08002B30309D}",
+            "value_data": 0,
+            "value_type": "DWORD",
+            "rollback_data": 1,
+            "rollback_delete": false
         }
     ]
 }

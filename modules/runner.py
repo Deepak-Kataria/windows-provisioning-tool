@@ -7,6 +7,12 @@ from modules.paths import get_base_dir
 
 SCRIPTS_DIR = os.path.join(get_base_dir(), "scripts")
 
+_SPINNER = {'/', '-', '\\', '|'}
+
+
+def _is_noise(line: str) -> bool:
+    return line in _SPINNER
+
 
 def _local_script_path(script_path: str):
     """Return (path, is_temp). Copies to local temp if path is UNC — PowerShell -File rejects UNC paths."""
@@ -53,7 +59,7 @@ def run_winget(winget_id: str, callback=None, process_holder: list = None):
     output_lines = []
     for line in process.stdout:
         line = line.strip()
-        if line:
+        if line and not _is_noise(line):
             output_lines.append(line)
             if callback:
                 callback(line)
@@ -72,7 +78,7 @@ def run_winget_uninstall(winget_id: str, callback=None, process_holder: list = N
     output_lines = []
     for line in process.stdout:
         line = line.strip()
-        if line:
+        if line and not _is_noise(line):
             output_lines.append(line)
             if callback:
                 callback(line)
@@ -179,6 +185,30 @@ def run_local_installer(path: str, args: list = None, callback=None, process_hol
 
     process.wait()
     return process.returncode, "\n".join(output_lines)
+
+
+def run_encoded_powershell(script: str, timeout: int = 120):
+    """Run a multi-line PowerShell script via -EncodedCommand (no command-line quoting issues).
+
+    Returns (returncode, output) in the same shape as run_inline_powershell; stderr lines are
+    appended with an "ERR: " prefix. A hung script is killed after `timeout` seconds.
+    """
+    import base64
+    prelude = ("$ProgressPreference='SilentlyContinue';"
+               "[Console]::OutputEncoding=[Text.Encoding]::UTF8;\n")
+    encoded = base64.b64encode((prelude + script).encode("utf-16-le")).decode("ascii")
+    cmd = ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+           "-EncodedCommand", encoded]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
+                              errors="replace", timeout=timeout,
+                              creationflags=subprocess.CREATE_NO_WINDOW)
+    except subprocess.TimeoutExpired:
+        return -1, f"ERR: timed out after {timeout}s"
+    lines = [ln.strip() for ln in proc.stdout.splitlines() if ln.strip()]
+    lines += [f"ERR: {ln.strip()}" for ln in proc.stderr.splitlines()
+              if ln.strip() and not ln.startswith("#< CLIXML") and "<Objs " not in ln]
+    return proc.returncode, "\n".join(lines)
 
 
 def run_inline_powershell(script: str, callback=None):

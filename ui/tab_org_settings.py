@@ -42,7 +42,7 @@ class OrgSettingsTab(ctk.CTkFrame):
         apply_scroll.grid_columnconfigure(0, weight=1)
         apply_scroll.grid_columnconfigure(1, weight=2)
 
-        for i, tweak in enumerate(self.settings_data["registry_tweaks"]):
+        for i, tweak in enumerate(self.settings_data["tweaks"]):
             var = ctk.BooleanVar(value=True)
             row_frame = ctk.CTkFrame(apply_scroll, fg_color="transparent")
             row_frame.grid(row=i, column=0, columnspan=2, sticky="ew", pady=3, padx=4)
@@ -54,9 +54,18 @@ class OrgSettingsTab(ctk.CTkFrame):
                 row=0, column=1, sticky="w", padx=12)
             self.apply_checkboxes[i] = (var, tweak)
 
-        self.apply_btn = ctk.CTkButton(apply_card, text="Apply Selected Settings",
+        apply_btn_row = ctk.CTkFrame(apply_card, fg_color="transparent")
+        apply_btn_row.grid(row=3, column=0, padx=20, pady=(0, 8), sticky="w")
+
+        self.apply_btn = ctk.CTkButton(apply_btn_row, text="Apply Selected Settings",
                                         command=self._apply)
-        self.apply_btn.grid(row=3, column=0, padx=20, pady=(0, 8), sticky="w")
+        self.apply_btn.grid(row=0, column=0, padx=(0, 8))
+        ctk.CTkButton(apply_btn_row, text="Select All", width=90,
+                       command=lambda: [v.set(True) for v, _ in self.apply_checkboxes.values()]).grid(
+            row=0, column=1, padx=4)
+        ctk.CTkButton(apply_btn_row, text="Deselect All", width=90,
+                       command=lambda: [v.set(False) for v, _ in self.apply_checkboxes.values()]).grid(
+            row=0, column=2, padx=4)
 
         apply_prog = ctk.CTkFrame(apply_card, fg_color="transparent")
         apply_prog.grid(row=4, column=0, padx=20, pady=(0, 12), sticky="ew")
@@ -83,7 +92,7 @@ class OrgSettingsTab(ctk.CTkFrame):
         rb_scroll.grid(row=2, column=0, padx=10, pady=(0, 8), sticky="ew")
         rb_scroll.grid_columnconfigure(0, weight=1)
 
-        for i, tweak in enumerate(self.settings_data["registry_tweaks"]):
+        for i, tweak in enumerate(self.settings_data["tweaks"]):
             var = ctk.BooleanVar(value=False)
             ctk.CTkCheckBox(rb_scroll, text=f"Restore: {tweak['name']}", variable=var).grid(
                 row=i, column=0, sticky="w", padx=10, pady=3)
