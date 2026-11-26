@@ -2,6 +2,20 @@
 
 Status: draft, 2026-11-26. Desktop app (v1.3.0) stays as-is and keeps working in parallel.
 
+## Progress (branch `web`)
+
+How to run/test locally: [`web/README.md`](../web/README.md).
+
+- [x] Phase 0 backend: auth + mandatory TOTP, sessions/CSRF, roles, users, enrollment codes,
+      machines + revoke, agent WSS channel, jobs + live output, audit log, Alembic, Docker/Caddy files
+- [x] Agent: enroll/run/service CLI, reconnect, DPAPI token, signed bundle, allowlisted executor
+- [x] Phase 1 backend: system.info, security.scan/fix, apps.install/uninstall (catalog only),
+      app catalog API, latest result per machine, security CSV export
+- [ ] Web UI (Jinja/HTMX) for all of the above
+- [ ] Agent exe (PyInstaller) + agent-setup
+- [ ] Phase 2+: debloat, tweaks, telemetry, cleanup, bulk actions, groups, ...
+- [ ] Deploy on the Ubuntu server (waiting on server + DNS)
+
 ## Decisions (from user)
 
 | Question | Answer |
