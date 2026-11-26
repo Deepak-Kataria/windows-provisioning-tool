@@ -43,6 +43,8 @@ class Settings(BaseSettings):
 
     # Directory holding action definitions (*.json)
     actions_dir: Path = WEB_DIR / "actions"
+    # Desktop app config (app catalog: apps_common.json, apps_teams.json)
+    config_dir: Path = REPO_DIR / "config"
 
     # Trust X-Forwarded-For from the reverse proxy (Caddy). Only enable behind the proxy.
     trust_proxy: bool = False

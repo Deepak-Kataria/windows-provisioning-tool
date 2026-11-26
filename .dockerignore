@@ -1,0 +1,10 @@
+# Docker build context is the repo root (web/deploy/docker-compose.yml).
+# Allowlist: only what the web server image needs.
+*
+!web/server/
+!web/actions/
+!config/apps_common.json
+!config/apps_teams.json
+**/__pycache__
+**/*.db
+web/server/tests/

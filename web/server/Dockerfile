@@ -1,15 +1,16 @@
-# Build context: web/   (see deploy/docker-compose.yml)
+# Build context: repo root (see web/deploy/docker-compose.yml)
 FROM python:3.11-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 ITOPS_CONFIG_DIR=/app/config
 RUN useradd --system --uid 10001 --home /app itops
 WORKDIR /app/server
 
-COPY server/requirements.txt .
+COPY web/server/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY server/ /app/server/
-COPY actions/ /app/actions/
+COPY web/server/ /app/server/
+COPY web/actions/ /app/actions/
+COPY config/apps_common.json config/apps_teams.json /app/config/
 
 USER itops
 EXPOSE 8000

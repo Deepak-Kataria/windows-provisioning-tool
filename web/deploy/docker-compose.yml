@@ -21,8 +21,8 @@ services:
 
   api:
     build:
-      context: ..
-      dockerfile: server/Dockerfile
+      context: ../..
+      dockerfile: web/server/Dockerfile
     restart: unless-stopped
     environment:
       ITOPS_DATABASE_URL: postgresql+psycopg://itops:${POSTGRES_PASSWORD}@db:5432/itops

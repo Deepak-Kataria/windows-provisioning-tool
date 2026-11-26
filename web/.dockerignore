@@ -1,6 +1,0 @@
-.venv/
-agent/
-tools/
-**/__pycache__
-**/*.db
-**/.pytest_cache
