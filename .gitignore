@@ -13,3 +13,10 @@ _build_env/
 *logs*.doc
 gpresult.html
 ui_settings.json
+
+# web
+web/.venv/
+*.db
+*.db-journal
+.pytest_cache/
+web/agent/state/
