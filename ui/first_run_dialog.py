@@ -1,4 +1,6 @@
 import customtkinter as ctk
+
+from ui import theme as T
 from modules.auth import change_password
 
 
@@ -34,7 +36,7 @@ class FirstRunDialog(ctk.CTkToplevel):
 
         ctk.CTkLabel(self,
                       text="You must set a new password before continuing.\nThis dialog cannot be skipped.",
-                      text_color="gray", font=ctk.CTkFont(size=12),
+                      text_color=T.MUTED, font=ctk.CTkFont(size=12),
                       justify="left").grid(
             row=1, column=0, padx=30, pady=(0, 24), sticky="w")
 
@@ -54,7 +56,7 @@ class FirstRunDialog(ctk.CTkToplevel):
                                         show="*")
         self.confirm_pw.grid(row=5, column=0, padx=30, pady=(0, 8))
 
-        self.error_label = ctk.CTkLabel(self, text="", text_color="#FF5555",
+        self.error_label = ctk.CTkLabel(self, text="", text_color=T.FAIL,
                                          font=ctk.CTkFont(size=12))
         self.error_label.grid(row=6, column=0, pady=(0, 4))
 

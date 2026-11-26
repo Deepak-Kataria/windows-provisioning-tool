@@ -194,7 +194,7 @@ CHECKS = [
         "severity": "MEDIUM",
         "check_ps": (
             "$out = net accounts 2>&1 | Out-String;"
-            " if ($out -match 'Maximum password age:\\s+(\\S+)') {"
+            " if ($out -match 'Maximum password age[^:\\r\\n]*:\\s+(\\S+)') {"
             " $age = $matches[1];"
             " if ($age -eq 'Unlimited') { 'WARN: Password max age: Unlimited' }"
             " elseif ([int]$age -gt 90) { \"WARN: Password max age: $age days (>90)\" }"
@@ -408,9 +408,10 @@ CHECKS = [
         "impact": "No automatic fix applied (blanket-editing service paths can break vendor updates). Opens Services console for manual review — flagged services need quotes added around their path in the registry ImagePath value.",
         "severity": "MEDIUM",
         "check_ps": (
+            # Exploitable only if the executable path itself (up to .exe) has a space and no quotes
             "$bad = Get-CimInstance Win32_Service -EA SilentlyContinue | Where-Object {"
-            " $_.PathName -and $_.PathName -notmatch '^\"' -and $_.PathName -match ' ' -and"
-            " $_.PathName -match '\\.exe' -and $_.PathName -notmatch '\\.exe\"?$' }"
+            " $_.PathName -and $_.PathName -notmatch '^\\s*\"' -and"
+            " $_.PathName -match '^(.+?\\.exe)' -and $matches[1] -match ' ' }"
             " | Select-Object -ExpandProperty Name;"
             " if ($bad) { \"WARN: Unquoted service paths: $($bad -join ', ')\" } else { 'PASS' }"
         ),
@@ -528,7 +529,7 @@ CHECKS += [
         "severity": "MEDIUM",
         "check_ps": r'''
 $risky = @{21='FTP';23='Telnet';69='TFTP';1433='MSSQL';3306='MySQL';3389='RDP';5432='PostgreSQL';
-           5800='VNC-HTTP';5900='VNC';5901='VNC';5985='WinRM';5986='WinRM-HTTPS';6379='Redis';27017='MongoDB'}
+           5800='VNC-HTTP';5900='VNC';5901='VNC';6379='Redis';27017='MongoDB'}
 $l = Get-NetTCPConnection -State Listen -EA SilentlyContinue | Where-Object { $_.LocalAddress -notin '127.0.0.1','::1' }
 $ports = @($l | ForEach-Object { [int]$_.LocalPort } | Sort-Object -Unique)
 $hit = $ports | Where-Object { $risky.ContainsKey($_) } | ForEach-Object { "$_/$($risky[$_])" }
@@ -636,11 +637,11 @@ if (-not $cs.PartOfDomain -and -not $aad) { 'PASS: Not applicable (not domain or
     {
         "id": "risky_services",
         "name": "Running Services Audit",
-        "description": "Remote-access, discovery and legacy services that are running but rarely needed on a workstation.",
+        "description": "Remote-access, discovery and legacy services that are running but rarely needed on a workstation (WinRM has its own check).",
         "impact": "No automatic change. Opens Services — disable only services you have confirmed are unused (e.g. a TeamViewer/AnyDesk install may be IT's own remote-support tool).",
         "severity": "MEDIUM",
         "check_ps": r'''
-$names = 'SNMP','SSDPSRV','upnphost','WinRM','FTPSVC','MSFTPSVC','TlntSvr','simptcp','W3SVC','sshd',
+$names = 'SNMP','SSDPSRV','upnphost','FTPSVC','MSFTPSVC','TlntSvr','simptcp','W3SVC','sshd',
          'TeamViewer*','AnyDesk*','tvnserver','uvnc_service','vncserver*','winvnc*','ScreenConnect*','LogMeIn*','Splashtop*'
 $run = @(Get-Service -EA SilentlyContinue | Where-Object { $_.Status -eq 'Running' } |
          Where-Object { $n = $_.Name; $names | Where-Object { $n -like $_ } } |
@@ -802,6 +803,99 @@ if ($s -eq 4 -or $d -eq 1) { 'PASS: USB mass storage blocked' } else { 'WARN: US
         "undo_ps": "Set-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\USBSTOR' -Name Start -Value 3 -Type DWord -Force; Write-Host 'USB mass storage allowed.'",
         "undo_label": "Revert (Allow USB Storage)",
     },
+    {
+        "id": "weak_passwords",
+        "name": "Weak Password Settings",
+        "description": "Enabled local accounts with a blank password, short minimum password length, or no lockout threshold make password guessing easy. (Blank passwords are tested with one empty-password network logon per account that allows it — this logs one failed logon, event 4625, per such account.)",
+        "impact": "New passwords must be at least 8 characters, and 10 wrong attempts locks an account for 30 minutes (IT can unlock sooner). Accounts with a blank password must be fixed by hand (set a password).",
+        "severity": "HIGH",
+        "check_ps": r'''
+Add-Type -Namespace PwChk -Name Native -MemberDefinition @"
+[DllImport("advapi32.dll", SetLastError=true, CharSet=CharSet.Unicode)]
+public static extern bool LogonUser(string user, string domain, string pass, int type, int provider, out IntPtr token);
+[DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr h);
+"@
+# Only accounts with PasswordRequired=False can have a blank password. Network logon (3)
+# with "" succeeds, or fails with 1327 (account restriction) when blank passwords are
+# limited to console logon — both mean the password is blank. 1326 = has a password.
+$blank = @(foreach ($u in Get-LocalUser -EA SilentlyContinue | Where-Object { $_.Enabled -and -not $_.PasswordRequired }) {
+  $h = [IntPtr]::Zero
+  $ok = [PwChk.Native]::LogonUser($u.Name, '.', '', 3, 0, [ref]$h)
+  $code = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+  if ($ok) { [void][PwChk.Native]::CloseHandle($h) }
+  if ($ok -or $code -eq 1327) { $u.Name } })
+$out = net accounts 2>&1 | Out-String
+$min = if ($out -match 'Minimum password length:\s+(\d+)') { [int]$matches[1] } else { $null }
+$lock = if ($out -match 'Lockout threshold:\s+(\S+)') { $matches[1] } else { $null }
+$p = @()
+if ($blank) { $p += "Accounts with a BLANK password: $($blank -join ', ')" }
+if ($min -ne $null -and $min -lt 8) { $p += "Minimum password length is $min (<8)" }
+if ($lock -eq 'Never') { $p += 'No account lockout threshold' }
+if ($blank) { "FAIL: $($p -join ' | ')" }
+elseif ($p) { "WARN: $($p -join ' | ')" }
+else { "PASS: Minimum length $min, lockout after $lock attempts" }
+''',
+        "fix_ps": "net accounts /minpwlen:8 /lockoutthreshold:10 /lockoutduration:30 /lockoutwindow:30; Write-Host 'Min length 8, lockout after 10 attempts.'",
+        "fix_label": "Set Length + Lockout",
+        "undo_ps": "net accounts /minpwlen:0 /lockoutthreshold:0; Write-Host 'Min length and lockout reset to Windows defaults.'",
+        "undo_label": "Revert (Defaults)",
+    },
+    {
+        "id": "winrm",
+        "name": "WinRM / Remote PowerShell",
+        "description": "A WinRM listener lets anyone with admin credentials run PowerShell on this machine remotely — a common lateral-movement path.",
+        "impact": "Remote PowerShell, some RMM tools and Server Manager can no longer reach this machine. If Group Policy enables WinRM it will be turned back on at the next policy refresh.",
+        "severity": "MEDIUM",
+        "check_ps": r'''
+$s = Get-Service WinRM -EA SilentlyContinue
+$l = @(Get-NetTCPConnection -State Listen -LocalPort 5985,5986 -EA SilentlyContinue | ForEach-Object { $_.LocalPort } | Sort-Object -Unique)
+if ($l) { "WARN: WinRM listening on port(s) $($l -join ', ') (remote PowerShell enabled)" }
+elseif ($s -and "$($s.Status)" -eq 'Running') { 'PASS: WinRM service running, no network listener' }
+else { 'PASS' }
+''',
+        "fix_ps": "Stop-Service WinRM -Force -EA SilentlyContinue; Set-Service WinRM -StartupType Disabled; Write-Host 'WinRM disabled.'",
+        "fix_label": "Disable WinRM",
+        "undo_ps": "Set-Service WinRM -StartupType Automatic; Start-Service WinRM -EA SilentlyContinue; Write-Host 'WinRM re-enabled.'",
+        "undo_label": "Revert (Re-enable WinRM)",
+    },
+    {
+        "id": "ps_execution_policy",
+        "name": "PowerShell Execution Policy",
+        "description": "An Unrestricted/Bypass machine policy lets any downloaded script run without warning (not a hard security boundary, but removes a speed bump).",
+        "impact": "Scripts downloaded from the internet must be signed or unblocked (Unblock-File) before they run; local scripts still run. This tool's own scripts are unaffected.",
+        "severity": "LOW",
+        "check_ps": r'''
+# Ignore the Process scope (this check itself runs with -ExecutionPolicy Bypass)
+$l = Get-ExecutionPolicy -List | Where-Object { "$($_.Scope)" -ne 'Process' -and "$($_.ExecutionPolicy)" -ne 'Undefined' } | Select-Object -First 1
+$eff = if ($l) { "$($l.ExecutionPolicy)" } else { 'Restricted' }
+$scope = if ($l) { "$($l.Scope)" } else { 'Windows default' }
+if ($eff -in 'Unrestricted','Bypass') { "WARN: Execution policy is $eff ($scope)" } else { "PASS: Execution policy is $eff ($scope)" }
+''',
+        "fix_ps": r'''
+Set-ExecutionPolicy RemoteSigned -Scope LocalMachine -Force -EA SilentlyContinue
+if ("$(Get-ExecutionPolicy -Scope CurrentUser)" -in 'Unrestricted','Bypass') { Set-ExecutionPolicy Undefined -Scope CurrentUser -Force -EA SilentlyContinue }
+Write-Host 'Execution policy set to RemoteSigned.'
+''',
+        "fix_label": "Set RemoteSigned",
+        "undo_ps": "Set-ExecutionPolicy Unrestricted -Scope LocalMachine -Force -EA SilentlyContinue; Write-Host 'Execution policy set to Unrestricted.'",
+        "undo_label": "Revert (Unrestricted)",
+    },
+    {
+        "id": "bios_age",
+        "name": "BIOS / Firmware Age",
+        "description": "Old firmware misses fixes for CPU and boot-level vulnerabilities (e.g. Spectre-class microcode, LogoFAIL).",
+        "impact": "No automatic change. Get the update from the PC vendor's support site or update tool. Keep the laptop on mains power while flashing — an interrupted update can brick the board.",
+        "severity": "LOW",
+        "check_ps": r'''
+$b = Get-CimInstance Win32_BIOS -EA SilentlyContinue
+if (-not $b -or -not $b.ReleaseDate) { 'WARN: Could not read BIOS release date' } else {
+  $d = $b.ReleaseDate.ToString('yyyy-MM-dd')
+  if ($b.ReleaseDate -lt (Get-Date).AddYears(-3)) { "WARN: BIOS $($b.SMBIOSBIOSVersion) ($($b.Manufacturer)) dated $d, check the vendor for updates" }
+  else { "PASS: BIOS $($b.SMBIOSBIOSVersion) dated $d" } }
+''',
+        "fix_ps": "Start-Process msinfo32; Write-Host 'System Information opened.'",
+        "fix_label": "Open System Info",
+    },
 ]
 
 
@@ -811,17 +905,19 @@ CATEGORIES = ["Network", "Accounts", "System", "Policy", "Hardware"]
 
 _CATEGORY_OF = {
     "Network":  ["firewall", "rdp", "rdp_nla", "smb1", "smb_signing", "smb_null_session",
-                 "admin_shares", "tls_weak_protocols", "open_ports", "shared_folders", "llmnr_netbios"],
-    "Accounts": ["guest", "autologon", "wdigest", "lsa_protection", "local_admins", "laps"],
+                 "admin_shares", "tls_weak_protocols", "open_ports", "shared_folders", "llmnr_netbios",
+                 "winrm"],
+    "Accounts": ["guest", "autologon", "wdigest", "lsa_protection", "local_admins", "laps",
+                 "weak_passwords"],
     "System":   ["defender", "uac", "windows_updates", "remote_registry", "telnet", "print_spooler",
                  "unquoted_service_path", "risky_services", "scheduled_tasks", "vulnerable_software", "cert_expiry"],
-    "Policy":   ["password_policy", "cached_logons", "asr_office", "autorun"],
-    "Hardware": ["bitlocker", "secure_boot", "outdated_drivers", "usb_storage"],
+    "Policy":   ["password_policy", "cached_logons", "asr_office", "autorun", "ps_execution_policy"],
+    "Hardware": ["bitlocker", "secure_boot", "outdated_drivers", "usb_storage", "bios_age"],
 }
 
 # Fixes that can interrupt how people work — left unticked by default in "Fix All".
 DISRUPTIVE = {"rdp", "print_spooler", "admin_shares", "usb_storage", "tls_weak_protocols",
-              "cached_logons", "smb1", "llmnr_netbios"}
+              "cached_logons", "smb1", "llmnr_netbios", "winrm", "weak_passwords"}
 
 for _cat, _ids in _CATEGORY_OF.items():
     for _id in _ids:
@@ -833,7 +929,8 @@ for _c in CHECKS:
 CHECKS_BY_ID = {c["id"]: c for c in CHECKS}
 
 SEVERITIES = ["HIGH", "MEDIUM", "LOW"]
-STATUS_ORDER = {"FAIL": 0, "WARN": 1, "UNKNOWN": 2, "PASS": 3}
+# INFO = informational finding listed for review; no penalty.
+STATUS_ORDER = {"FAIL": 0, "WARN": 1, "UNKNOWN": 2, "INFO": 3, "PASS": 4}
 
 # Penalty points per (severity, status) used for the 0-100 security score.
 _PENALTY = {
@@ -853,7 +950,7 @@ def is_auto_fixable(check):
 def parse_result(out):
     lines = [ln.strip() for ln in (out or "").strip().splitlines() if ln.strip()]
     line = next((ln for ln in lines if not ln.startswith("ERR:")), lines[0] if lines else "")
-    for prefix in ("FAIL:", "WARN:", "PASS:"):
+    for prefix in ("FAIL:", "WARN:", "INFO:", "UNKNOWN:", "PASS:"):
         if line.upper().startswith(prefix):
             return prefix.rstrip(":"), line[len(prefix):].strip()
     if line.upper() == "PASS":
@@ -871,11 +968,15 @@ def evaluate(check, out):
     return parse_result(out)
 
 
-def risk_summary(results):
-    """results: {id: (status, detail)} → dict with counts, score (0-100) and level."""
-    counts = {"PASS": 0, "FAIL": 0, "WARN": 0, "UNKNOWN": 0}
+def risk_summary(results, checks=None):
+    """results: {id: (status, detail)} → dict with counts, score (0-100) and level.
+
+    `checks` defaults to the Security tab's CHECKS; pass another list to score it instead.
+    """
+    checks = CHECKS if checks is None else checks
+    counts = {"PASS": 0, "FAIL": 0, "WARN": 0, "UNKNOWN": 0, "INFO": 0}
     high_fail = penalty = max_penalty = 0
-    for check in CHECKS:
+    for check in checks:
         status = results.get(check["id"], ("UNKNOWN", ""))[0]
         counts[status] = counts.get(status, 0) + 1
         max_penalty += _PENALTY[(check["severity"], "FAIL")]
@@ -883,9 +984,9 @@ def risk_summary(results):
         if check["severity"] == "HIGH" and status == "FAIL":
             high_fail += 1
 
-    medium_fail = sum(1 for c in CHECKS if c["severity"] == "MEDIUM"
+    medium_fail = sum(1 for c in checks if c["severity"] == "MEDIUM"
                       and results.get(c["id"], ("",))[0] == "FAIL")
-    high_warn = sum(1 for c in CHECKS if c["severity"] == "HIGH"
+    high_warn = sum(1 for c in checks if c["severity"] == "HIGH"
                     and results.get(c["id"], ("",))[0] == "WARN")
 
     if high_fail >= 3:

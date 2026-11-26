@@ -1,9 +1,12 @@
 import customtkinter as ctk
+
+from ui import theme as T
 import threading
 import tkinter.messagebox as msgbox
 from modules.runner import run_inline_powershell
 from modules.logger import log
 from modules.utils import format_size
+from ui.widgets import ActionBar, LogDrawer, confirm_run, section_header, tip
 
 
 GROUPS = [
@@ -691,120 +694,70 @@ class WindowsCleanupSection(ctk.CTkFrame):
         self._build()
 
     def _build(self):
-        self.grid_rowconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
-        wrap = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        wrap.grid(row=0, column=0, sticky="nsew")
+        ctk.CTkLabel(self, text="Scan sizes first, then tick and clean. Items marked CAN'T UNDO ask again before running.",
+                     font=T.ui(11), text_color=T.MUTED, anchor="w").grid(row=0, column=0, sticky="w", pady=(0, 6))
+
+        wrap = ctk.CTkScrollableFrame(self, fg_color="transparent", corner_radius=0)
+        wrap.grid(row=1, column=0, sticky="nsew")
         wrap.grid_columnconfigure(0, weight=1)
 
-        # ── Header ─────────────────────────────────────────────────────
-        hdr = ctk.CTkFrame(wrap)
-        hdr.grid(row=0, column=0, padx=10, pady=(10, 4), sticky="ew")
-        hdr.grid_columnconfigure(0, weight=1)
-
-        ctk.CTkLabel(hdr, text="Windows Cleanup",
-                     font=ctk.CTkFont(size=15, weight="bold")).grid(
-            row=0, column=0, padx=14, pady=(12, 2), sticky="w")
-
-        ctk.CTkLabel(hdr,
-                     text="Scan sizes first, then select and clean.  [!] items show a confirm dialog.",
-                     font=ctk.CTkFont(size=11), text_color="gray").grid(
-            row=1, column=0, padx=14, pady=(0, 6), sticky="w")
-
-        btn_row = ctk.CTkFrame(hdr, fg_color="transparent")
-        btn_row.grid(row=2, column=0, padx=10, pady=(0, 8), sticky="w")
-
-        self._scan_btn = ctk.CTkButton(btn_row, text="Scan Sizes", width=110,
-                                       command=self._scan)
-        self._scan_btn.grid(row=0, column=0, padx=(4, 6))
-
-        self._clean_btn = ctk.CTkButton(btn_row, text="Clean Selected", width=130,
-                                        fg_color="#c0392b", hover_color="#922b21",
-                                        command=self._clean)
-        self._clean_btn.grid(row=0, column=1, padx=6)
-
-        ctk.CTkButton(btn_row, text="Select All", width=90,
-                      command=self._select_all).grid(row=0, column=2, padx=6)
-        ctk.CTkButton(btn_row, text="Select None", width=90,
-                      command=self._select_none).grid(row=0, column=3, padx=6)
-
-        self._total_label = ctk.CTkLabel(hdr, text="Total selected: ---",
-                                         font=ctk.CTkFont(size=12), text_color="gray")
-        self._total_label.grid(row=3, column=0, padx=14, pady=(0, 12), sticky="w")
-
-        # ── Groups ─────────────────────────────────────────────────────
-        grid_row = 1
+        grid_row = 0
         for grp in GROUPS:
-            grp_hdr = ctk.CTkFrame(wrap, fg_color=("gray85", "gray25"), corner_radius=6)
-            grp_hdr.grid(row=grid_row, column=0, padx=10, pady=(10, 0), sticky="ew")
-            grp_hdr.grid_columnconfigure(0, weight=1)
-
-            inner = ctk.CTkFrame(grp_hdr, fg_color="transparent")
-            inner.grid(row=0, column=0, padx=8, pady=5, sticky="ew")
-            inner.grid_columnconfigure(0, weight=1)
-
-            ctk.CTkLabel(inner, text=grp["label"],
-                         font=ctk.CTkFont(size=12, weight="bold")).grid(
-                row=0, column=0, sticky="w")
-
-            ctk.CTkButton(inner, text="All", width=36, height=22,
-                          font=ctk.CTkFont(size=10),
-                          command=lambda g=grp: self._group_select(g, True)).grid(
-                row=0, column=1, padx=(4, 2))
-            ctk.CTkButton(inner, text="None", width=44, height=22,
-                          font=ctk.CTkFont(size=10),
-                          command=lambda g=grp: self._group_select(g, False)).grid(
-                row=0, column=2, padx=(2, 0))
-
+            hdr, col = section_header(wrap, grp["label"], height=28, accent=T.BORDER)
+            hdr.grid(row=grid_row, column=0, sticky="ew", pady=(10 if grid_row else 0, 0))
+            T.outline_button(hdr, text="all", width=36, height=20, font=T.mono(10),
+                             command=lambda g=grp: self._group_select(g, True)).grid(row=0, column=col + 1, padx=(4, 2))
+            T.outline_button(hdr, text="none", width=44, height=20, font=T.mono(10),
+                             command=lambda g=grp: self._group_select(g, False)).grid(row=0, column=col + 2, padx=(2, 8))
             grid_row += 1
 
-            items_card = ctk.CTkFrame(wrap, corner_radius=6)
-            items_card.grid(row=grid_row, column=0, padx=10, pady=(0, 2), sticky="ew")
-            items_card.grid_columnconfigure(1, weight=1)
-
+            items_card = ctk.CTkFrame(wrap, fg_color=T.PANEL, corner_radius=0)
+            items_card.grid(row=grid_row, column=0, sticky="ew")
+            items_card.grid_columnconfigure(0, weight=1)
             for i, loc in enumerate(grp["items"]):
                 var = ctk.BooleanVar(value=loc["default"])
                 var.trace_add("write", lambda *a: self._update_total())
                 self._vars[loc["id"]] = var
-
-                cb_kw = {
-                    "text": loc["label"],
-                    "variable": var,
-                    "font": ctk.CTkFont(size=12),
-                }
+                row = ctk.CTkFrame(items_card, fg_color=T.PANEL if i % 2 == 0 else T.PANEL_2,
+                                   corner_radius=0, height=32)
+                row.grid(row=i, column=0, sticky="ew")
+                row.grid_propagate(False)
+                row.grid_rowconfigure(0, weight=1)
+                row.grid_columnconfigure(1, weight=1)
+                ctk.CTkCheckBox(row, text=loc["label"], variable=var, font=T.ui(12),
+                                checkbox_width=16, checkbox_height=16).grid(row=0, column=0, padx=(12, 6), sticky="w")
                 if loc.get("confirm"):
-                    cb_kw["text_color"] = ("#c0392b", "#ff7675")
-
-                cb = ctk.CTkCheckBox(items_card, **cb_kw)
-                cb.grid(row=i, column=0, padx=(14, 6), pady=5, sticky="w")
-
-                size_lbl = ctk.CTkLabel(items_card, text="---",
-                                        text_color="gray", font=ctk.CTkFont(size=11))
-                size_lbl.grid(row=i, column=1, padx=(0, 14), pady=5, sticky="e")
+                    ctk.CTkLabel(row, text=" CAN'T UNDO ", font=T.mono(8, "bold"), text_color=T.WARN,
+                                 fg_color=T.PANEL_3, corner_radius=2, height=14).grid(row=0, column=1, sticky="w")
+                size_lbl = ctk.CTkLabel(row, text="---", text_color=T.MUTED, font=T.mono(11), width=90, anchor="e")
+                size_lbl.grid(row=0, column=2, padx=(0, 14), sticky="e")
                 self._size_labels[loc["id"]] = size_lbl
-
             grid_row += 1
 
-        # ── Output ─────────────────────────────────────────────────────
-        ctk.CTkLabel(wrap, text="Output",
-                     font=ctk.CTkFont(size=13, weight="bold"), anchor="w").grid(
-            row=grid_row, column=0, padx=10, pady=(12, 2), sticky="w")
-        grid_row += 1
+        self._log = LogDrawer(self)
+        self._log.grid(row=2, column=0, sticky="ew", pady=(6, 0))
 
-        self._output = ctk.CTkTextbox(wrap, height=220, state="disabled",
-                                      font=ctk.CTkFont(family="Courier New", size=11))
-        self._output.grid(row=grid_row, column=0, padx=10, pady=(0, 10), sticky="ew")
-
+        self._action = ActionBar(self)
+        self._action.grid(row=3, column=0, sticky="ew", pady=(6, 0))
+        self._scan_btn = self._action.button("Scan sizes", self._scan, outline=True, width=100,
+                                             tip_text="Measure how much space each location uses. Nothing is deleted.")
+        self._action.button("Select all", self._select_all, outline=True, width=90,
+                            tip_text="Tick every location (Ctrl+A)")
+        self._action.button("Select none", self._select_none, outline=True, width=96,
+                            tip_text="Untick every location (Ctrl+Shift+A)")
+        self._clean_btn = self._action.button("Clean selected", self._clean, danger=True, width=130,
+                                              tip_text="Delete the contents of the ticked locations (Ctrl+Enter). "
+                                                       "You'll see the list before anything runs.")
+        self._total_label = self._action._summary
         self._update_total()
 
     # ── Helpers ────────────────────────────────────────────────────────
 
     def _append(self, text):
-        self._output.configure(state="normal")
-        self._output.insert("end", text + "\n")
-        self._output.see("end")
-        self._output.configure(state="disabled")
+        self._log.append(text)
 
     def _safe_append(self, text):
         self.after(0, self._append, text)
@@ -837,6 +790,16 @@ class WindowsCleanupSection(ctk.CTkFrame):
         for var in self._vars.values():
             var.set(False)
 
+    # Keyboard shortcuts (see ui/widgets.py)
+    def shortcut_select_all(self):
+        self._select_all()
+
+    def shortcut_deselect_all(self):
+        self._select_none()
+
+    def shortcut_apply(self):
+        self._clean()
+
     def _group_select(self, grp, value):
         for loc in grp["items"]:
             self._vars[loc["id"]].set(value)
@@ -851,7 +814,7 @@ class WindowsCleanupSection(ctk.CTkFrame):
 
     def _update_size_label(self, loc_id, val):
         lbl = self._size_labels[loc_id]
-        color = ("#1a1a1a", "white") if val > 0 else "gray"
+        color = T.TEXT_BRIGHT if val > 0 else T.MUTED
         lbl.configure(text=format_size(val), text_color=color)
 
     # ── Scan ───────────────────────────────────────────────────────────
@@ -887,6 +850,20 @@ class WindowsCleanupSection(ctk.CTkFrame):
         selected = [loc for loc in LOCATIONS if self._vars[loc["id"]].get()]
         if not selected:
             self._append("No locations selected.")
+            return
+
+        def describe(loc):
+            sz = self._sizes.get(loc["id"])
+            size = f"  ({format_size(sz)})" if sz is not None else ""
+            return (loc["label"] + size + ("  [!]" if loc.get("confirm") else ""),
+                    bool(loc.get("confirm")))
+
+        if not confirm_run(self, "Clean these locations?",
+                           f"The contents of these {len(selected)} location(s) will be deleted:",
+                           [describe(loc) for loc in selected],
+                           action_text=f"Clean {len(selected)} location(s)", danger=True,
+                           footer="Items marked [!] will ask for confirmation again individually."
+                                  if any(l.get("confirm") for l in selected) else None):
             return
 
         confirmed = []

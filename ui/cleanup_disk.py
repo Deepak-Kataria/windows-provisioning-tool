@@ -1,14 +1,17 @@
 import customtkinter as ctk
+
+from ui import theme as T
 import threading
 import tkinter.messagebox as msgbox
 from modules.runner import run_powershell, run_inline_powershell
 from modules.logger import log
 from modules.utils import format_size
+from ui.widgets import LogDrawer, section_header, tip
 
 HEALTH_COLORS = {
-    "Healthy": "#2ecc71",
-    "Warning": "#f39c12",
-    "Unhealthy": "#e74c3c",
+    "Healthy": T.OK,
+    "Warning": T.WARN,
+    "Unhealthy": T.FAIL,
     "Unknown": "gray",
 }
 
@@ -27,80 +30,53 @@ class DiskAnalysisSection(ctk.CTkFrame):
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
-        wrap = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        wrap = ctk.CTkScrollableFrame(self, fg_color="transparent", corner_radius=0)
         wrap.grid(row=0, column=0, sticky="nsew")
         wrap.grid_columnconfigure(0, weight=1)
 
-        # ── Drives ─────────────────────────────────────────────────────
-        drives_hdr = ctk.CTkFrame(wrap)
-        drives_hdr.grid(row=0, column=0, padx=10, pady=(10, 4), sticky="ew")
-        drives_hdr.grid_columnconfigure(0, weight=1)
-
-        top_row = ctk.CTkFrame(drives_hdr, fg_color="transparent")
-        top_row.grid(row=0, column=0, padx=14, pady=(12, 6), sticky="ew")
-        top_row.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(top_row, text="Drives",
-                     font=ctk.CTkFont(size=15, weight="bold")).grid(row=0, column=0, sticky="w")
-        self._refresh_drives_btn = ctk.CTkButton(top_row, text="Refresh", width=90,
-                                                  command=self._load_drives)
-        self._refresh_drives_btn.grid(row=0, column=1, sticky="e")
-
-        self._drives_card = ctk.CTkFrame(wrap, corner_radius=6)
-        self._drives_card.grid(row=1, column=0, padx=10, pady=(0, 10), sticky="ew")
+        hdr, col = section_header(wrap, "Drives", height=30)
+        hdr.grid(row=0, column=0, sticky="ew")
+        self._refresh_drives_btn = T.outline_button(hdr, text="Refresh", width=80, height=22, font=T.ui(11),
+                                                    command=self._load_drives)
+        self._refresh_drives_btn.grid(row=0, column=col + 1, padx=8)
+        tip(self._refresh_drives_btn, "Reload drive list and free space")
+        self._drives_card = ctk.CTkFrame(wrap, fg_color=T.PANEL, corner_radius=0)
+        self._drives_card.grid(row=1, column=0, sticky="ew")
         self._drives_card.grid_columnconfigure(0, weight=1)
 
-        # ── Folder Breakdown ─────────────────────────────────────────
-        folder_hdr = ctk.CTkFrame(wrap)
-        folder_hdr.grid(row=2, column=0, padx=10, pady=(10, 4), sticky="ew")
-        folder_hdr.grid_columnconfigure(0, weight=1)
-
-        ctk.CTkLabel(folder_hdr, text="Folder Size Breakdown",
-                     font=ctk.CTkFont(size=15, weight="bold")).grid(
-            row=0, column=0, padx=14, pady=(12, 2), sticky="w")
-        ctk.CTkLabel(folder_hdr,
-                     text="Lists immediate subfolders of the current path, largest first. "
-                          "Scanning large trees (e.g. C:\\) may take a while.",
-                     font=ctk.CTkFont(size=11), text_color="gray").grid(
-            row=1, column=0, padx=14, pady=(0, 8), sticky="w")
-
-        path_row = ctk.CTkFrame(folder_hdr, fg_color="transparent")
-        path_row.grid(row=2, column=0, padx=10, pady=(0, 8), sticky="ew")
+        hdr, col = section_header(wrap, "Folder sizes", height=30)
+        hdr.grid(row=2, column=0, sticky="ew", pady=(12, 0))
+        ctk.CTkLabel(hdr, text="largest first · read-only", font=T.mono(10), text_color=T.MUTED).grid(
+            row=0, column=col, padx=4, sticky="w")
+        path_row = ctk.CTkFrame(wrap, fg_color=T.PANEL, corner_radius=0)
+        path_row.grid(row=3, column=0, sticky="ew")
         path_row.grid_columnconfigure(2, weight=1)
-
-        ctk.CTkLabel(path_row, text="Drive:").grid(row=0, column=0, padx=(4, 4))
-        self._drive_menu = ctk.CTkOptionMenu(path_row, values=["---"], width=80,
-                                             command=self._on_drive_selected)
+        ctk.CTkLabel(path_row, text="DRIVE", font=T.mono(10), text_color=T.MUTED).grid(row=0, column=0, padx=(12, 6), pady=8)
+        self._drive_menu = ctk.CTkOptionMenu(path_row, values=["---"], width=80, command=self._on_drive_selected)
         self._drive_menu.grid(row=0, column=1, padx=(0, 10))
-
-        self._path_entry = ctk.CTkEntry(path_row, placeholder_text="Path")
+        self._path_entry = ctk.CTkEntry(path_row, placeholder_text="Path", font=T.mono(11))
         self._path_entry.grid(row=0, column=2, padx=(0, 6), sticky="ew")
+        self._path_entry.bind("<Return>", lambda e: self._go_path())
+        tip(T.outline_button(path_row, text="Up", width=50, command=self._go_up),
+            "Go to the parent folder").grid(row=0, column=3, padx=3)
+        tip(T.outline_button(path_row, text="Go", width=50, command=self._go_path),
+            "Open the path typed in the box").grid(row=0, column=4, padx=3)
+        self._scan_folder_btn = ctk.CTkButton(path_row, text="Scan this folder", width=130, command=self._scan_folder)
+        self._scan_folder_btn.grid(row=0, column=5, padx=(6, 12))
+        tip(self._scan_folder_btn, "Size every subfolder of the current path, largest first (Ctrl+Enter). "
+                                   "Large trees such as C:\\ take a while.")
 
-        ctk.CTkButton(path_row, text="Up", width=50,
-                      command=self._go_up).grid(row=0, column=3, padx=3)
-        ctk.CTkButton(path_row, text="Go", width=50,
-                      command=self._go_path).grid(row=0, column=4, padx=3)
-        self._scan_folder_btn = ctk.CTkButton(path_row, text="Scan This Folder", width=140,
-                                              command=self._scan_folder)
-        self._scan_folder_btn.grid(row=0, column=5, padx=(6, 4))
-
-        self._folder_card = ctk.CTkFrame(wrap, corner_radius=6)
-        self._folder_card.grid(row=3, column=0, padx=10, pady=(0, 10), sticky="ew")
+        self._folder_card = ctk.CTkFrame(wrap, fg_color=T.PANEL, corner_radius=0)
+        self._folder_card.grid(row=4, column=0, sticky="ew", pady=(1, 0))
         self._folder_card.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(wrap, text="Output",
-                     font=ctk.CTkFont(size=13, weight="bold"), anchor="w").grid(
-            row=4, column=0, padx=10, pady=(12, 2), sticky="w")
-        self._output = ctk.CTkTextbox(wrap, height=160, state="disabled",
-                                      font=ctk.CTkFont(family="Courier New", size=11))
-        self._output.grid(row=5, column=0, padx=10, pady=(0, 10), sticky="ew")
+        self._log = LogDrawer(self)
+        self._log.grid(row=1, column=0, sticky="ew", pady=(6, 0))
 
     # ── Helpers ────────────────────────────────────────────────────────
 
     def _append(self, text):
-        self._output.configure(state="normal")
-        self._output.insert("end", text + "\n")
-        self._output.see("end")
-        self._output.configure(state="disabled")
+        self._log.append(text)
 
     def _safe_append(self, text):
         self.after(0, self._append, text)
@@ -170,7 +146,7 @@ class DiskAnalysisSection(ctk.CTkFrame):
 
         if not self._drives:
             ctk.CTkLabel(self._drives_card, text="No fixed drives found.",
-                         text_color="gray").grid(row=0, column=0, padx=14, pady=14, sticky="w")
+                         text_color=T.MUTED).grid(row=0, column=0, padx=14, pady=14, sticky="w")
             return
 
         for i, d in enumerate(self._drives):
@@ -184,23 +160,21 @@ class DiskAnalysisSection(ctk.CTkFrame):
             free_pct = (d["free"] / d["size"] * 100) if d["size"] else 0
             used_frac = 1 - (d["free"] / d["size"]) if d["size"] else 0
 
-            bar_color = "#e74c3c" if free_pct < 10 else ("#f39c12" if free_pct < 20 else "#2ecc71")
+            bar_color = T.FAIL if free_pct < 10 else (T.WARN if free_pct < 20 else T.OK)
             bar = ctk.CTkProgressBar(row, width=200, progress_color=bar_color)
             bar.set(used_frac)
             bar.grid(row=0, column=1, padx=(0, 14))
 
             size_text = f"{format_size(d['free'])} free of {format_size(d['size'])}  ({free_pct:.0f}% free)"
-            size_color = "#e74c3c" if free_pct < 10 else None
+            size_color = T.FAIL if free_pct < 10 else None
             size_kw = {"anchor": "w", "font": ctk.CTkFont(size=12)}
             if size_color:
                 size_kw["text_color"] = size_color
             ctk.CTkLabel(row, text=size_text, **size_kw).grid(row=0, column=2, sticky="w")
 
             health = d["health"]
-            badge_color = HEALTH_COLORS.get(health, "gray")
-            ctk.CTkLabel(row, text=f"  {health}  ", fg_color=badge_color, corner_radius=4,
-                         font=ctk.CTkFont(size=10), text_color="white").grid(
-                row=0, column=3, padx=(10, 4))
+            ctk.CTkLabel(row, text=health.upper(), font=T.mono(9, "bold"),
+                         text_color=HEALTH_COLORS.get(health, T.MUTED)).grid(row=0, column=3, padx=(10, 4))
 
     def _on_drive_selected(self, letter):
         if letter == "---":
@@ -212,9 +186,13 @@ class DiskAnalysisSection(ctk.CTkFrame):
 
     # ── Folder browser ───────────────────────────────────────────────
 
-    def _clear_folder_rows(self):
+    def _clear_folder_rows(self, hint=True):
         for w in self._folder_card.winfo_children():
             w.destroy()
+        if not hint:
+            return
+        ctk.CTkLabel(self._folder_card, text="Pick a drive or type a path, then Scan this folder.",
+                     font=T.ui(12), text_color=T.MUTED).grid(row=0, column=0, padx=14, pady=24, sticky="w")
 
     def _go_path(self):
         path = self._path_entry.get().strip()
@@ -222,6 +200,9 @@ class DiskAnalysisSection(ctk.CTkFrame):
             return
         self._current_path = path if path.endswith("\\") else path + "\\"
         self._clear_folder_rows()
+
+    def shortcut_apply(self):
+        self._scan_folder()
 
     def _go_up(self):
         if not self._current_path:
@@ -300,10 +281,10 @@ class DiskAnalysisSection(ctk.CTkFrame):
         threading.Thread(target=task, daemon=True).start()
 
     def _render_folder_rows(self, results):
-        self._clear_folder_rows()
+        self._clear_folder_rows(hint=False)
         if not results:
             ctk.CTkLabel(self._folder_card, text="No subfolders found.",
-                         text_color="gray").grid(row=0, column=0, padx=14, pady=14, sticky="w")
+                         text_color=T.MUTED).grid(row=0, column=0, padx=14, pady=14, sticky="w")
             return
 
         max_size = max((r[2] for r in results), default=0) or 1
@@ -313,13 +294,13 @@ class DiskAnalysisSection(ctk.CTkFrame):
             row.grid_columnconfigure(0, weight=1)
 
             btn = ctk.CTkButton(row, text=f"  {name}", anchor="w",
-                                fg_color="transparent", hover_color=("#3a3a3a", "#2a2a2a"),
+                                fg_color="transparent", hover_color=T.PANEL_3,
                                 font=ctk.CTkFont(size=12),
                                 command=lambda p=full_path: self._drill_into(p))
             btn.grid(row=0, column=0, sticky="ew")
 
             ctk.CTkLabel(row, text=format_size(size), font=ctk.CTkFont(size=11),
-                         text_color="gray", width=90).grid(row=0, column=1, padx=(6, 14))
+                         text_color=T.MUTED, width=90).grid(row=0, column=1, padx=(6, 14))
 
     def _drill_into(self, path):
         self._current_path = path if path.endswith("\\") else path + "\\"

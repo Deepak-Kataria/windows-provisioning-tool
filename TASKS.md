@@ -1,48 +1,10 @@
 # IT Provisioning Tool — Task Tracker
 
-Last updated: 2026-11-12
+Last updated: 2026-11-14
 
 ---
 
 ## Pending
-
----
-
-### #13 — System Compromise & Threat Report
-**Status:** Pending  
-**Details:**  
-
-**Goal:** Full report answering "has this machine been compromised, and what vulnerabilities exist that could allow it?"
-
-**Compromise Indicators (was it hacked?):**
-- Unusual local admin accounts (accounts not in approved list)
-- Unexpected scheduled tasks (non-Microsoft, recently created)
-- Suspicious startup entries (Run/RunOnce registry keys, Startup folder)
-- Running processes — flag unknown/unsigned processes
-- Recently installed software (last 30/60/90 days) — list for review
-- Open outbound connections — active network connections to external IPs
-- Windows Event Log analysis: failed logins (4625), account lockouts (4740), new account creation (4720), privilege escalation (4672), RDP sessions (4624 logon type 10)
-- Modified system files / unexpected files in System32
-- Antivirus/Defender last scan date + any quarantined threats
-
-**Vulnerability Exposure (can it be hacked?):**
-- All checks from Security tab (#10) included
-- Unpatched CVEs — compare installed software versions against known-vulnerable list
-- Weak/blank local account passwords (test with net accounts policy)
-- RDP exposed + no NLA
-- SMB shares open to Everyone
-- PowerShell execution policy (Unrestricted = risk)
-- WinRM enabled unexpectedly
-- AutoRun enabled on removable drives
-- Outdated BIOS/firmware version check
-
-**Report output:**
-- Overall risk score: CLEAN / LOW / MEDIUM / HIGH / CRITICAL
-- Two sections: "Signs of Compromise" + "Vulnerability Exposure"
-- Each finding: severity badge, description, recommended action
-- Export to HTML report file (readable, shareable)
-- Export to TXT (plain, for tickets)
-- Timestamp + machine name in report header
 
 ---
 
@@ -60,8 +22,10 @@ Last updated: 2026-11-12
 
 ---
 
+## In Progress
+
 ### #12 — UI/UX improvements across all tabs
-**Status:** Pending  
+**Status:** In progress (part 1 done 2026-11-14)  
 **Details:**  
 - Select All / Deselect All buttons on every tab that has checkboxes (Debloat, Privacy, Cleanup, Security)
 - Undo/rollback section per tab — show last N actions with individual undo buttons
@@ -72,20 +36,50 @@ Last updated: 2026-11-12
 - Keyboard shortcuts (Select All = Ctrl+A, Apply = Ctrl+Enter)
 - Tooltips on all buttons explaining what they do
 - Responsive layout — panels resize cleanly on smaller screens
+**Part 1 done (2026-11-14):** shared helpers in `ui/widgets.py`
+- `confirm_run()` "here's what will run" dialog (Enter = run, Esc = cancel; risky items in red) before: Debloat remove + reinstall, Tweaks apply + undo (Advanced tweaks highlighted), Windows Cleanup clean, Profile cleanup. Security Fix All already had its own confirm dialog. The existing per-item [!] / in-use warnings still appear after it.
+- `tip()` tooltips on the top bar, Debloat, Tweaks, Cleanup (all 3 sections), Security, Threat Report buttons.
+- Shortcuts: Ctrl+A select all, Ctrl+Shift+A deselect all, Ctrl+Enter main action (apply / clean / scan) on the visible tab; the Cleanup hub forwards to its visible section; ignored while typing in a text field. Tabs opt in via `shortcut_*` methods.
+- Select All / Deselect All already existed on every checkbox tab.
+**Part 2 done (2026-11-14): "ops console" redesign (shell + theme)**
+- `ui/theme.py`: dark navy palette with cyan accent, Segoe UI + Cascadia Mono/Consolas, CTk theme override applied in `main.py` (no extra file to bundle). Buttons given their own fg_color get light text automatically; secondary actions (Select All/None, Refresh, Scan Sizes, Up/Go) are outline buttons.
+- `ui/dashboard.py`: left sidebar (PROVISION / OPTIMIZE / DEFENSE / ADMIN groups, MDL2 icons, Ctrl+1..9), page header with breadcrumb + subtitle + shortcut hints, live status bar (online, host, IP, OS build, domain, user, elevation, uptime, clock). Opens maximised.
+- All tabs' hardcoded grey panels / `text_color="gray"` switched to theme tokens.
+**Part 3 in progress (2026-11-14): per-tab polish**
+- `ui/widgets.py`: `StatTile` / `tile_row`, `meta_line`, `section_header` (accent-stripe group bar), `status_cell`. `ui/theme.py`: shared `STATUS`, `STATUS_TAG`, `SEV`, `SEV_TAG` maps.
+- Security + Threat Report: summary is a row of stat tiles (risk / score / failed / warnings / passed; overall / compromise / exposure / flagged) + mono host/scan strip; denser rows with mono PASS/FAIL + severity columns, mono detail text, real alternating row colours; all hardcoded hex replaced with theme tokens.
+- Layout direction chosen 2026-11-14: **Good One + Command Center** (compared 7 mock-ups: Good One, Command Center, Split View, Setup Wizard, Compact Ribbon, Triage Board, Task Queue Console).
+- `ui/tab_home.py` Home page (OVERVIEW group, Ctrl+0, opens on start): cards for Security / Threats (from in-session scan results), Disk C:, Bloatware (debloat list vs installed Appx, background), Profiles (stale = 90+ days, background), System (uptime + pending restart via registry); recent actions from changes.log; Refresh button / Ctrl+Enter. Dashboard calls `attach_shell()` and `on_show()` on pages that define them.
+- All remaining tabs redesigned to Good One after mock-up approval (2026-11-14), each showing live state from this PC:
+  - Users: account table, per-row Reset password / Delete (confirm), YOU tag, last admin protected, created date.
+  - Debloat: INSTALLED / NOT PRESENT via Appx, Remove/Reinstall switch, installed-only filter, search.
+  - Tweaks: APPLIED / NOT SET from the registry (`modules/reg_state.py`), descriptions inline, CAUTION tags, power plan switch.
+  - Apps: one table (Common/Team/Local), INSTALLED <version> via registry + background `winget export` (`modules/installed_apps.py`).
+  - Config: feature ENABLED status, fixes with duration + DISRUPTIVE tag and a confirm step (they ran on click before), panel tiles.
+  - Cleanup: hub tiles (reclaimable, disk, profiles, selected), profile table with IN USE / STALE, CAN'T UNDO tags.
+  - System: hardware tiles load automatically, compact rename card with large preview, domain credentials only when joined.
+  - Shared widgets: `ActionBar`, `LogDrawer`, `StatTile` (auto-shrinks long values), tooltips on segmented buttons.
+**Still to do:** login screen restyle (login is currently disabled), undo history per tab, unified results dialog (collapse/expand), last-run + pass/fail badge on tab headers, progress feedback where missing, tooltips on System/Apps/Config/Users tabs, responsive layout.
 
----
-
-## In Progress
-
-*(none)*
 
 ---
 
 ## Completed (this session continued)
 
+### #13 — System Compromise & Threat Report ✓
+**Completed:** 2026-11-12 (needs a test run, as administrator, on a real machine)
+**Result:** New admin-only **Threat Report** tab (`ui/tab_threat.py`) — checks in `modules/threat_checks.py`, scoring + TXT/HTML in `modules/threat_report.py` (shares building blocks with `modules/security_report.py`).
+- **Signs of Compromise (13 indicators):** event log cleared (1102/104), failed logons + lockouts (4625/4740, brute-force threshold), new accounts / added to Administrators (4720/4732), unapproved local admins (vs `config/approved_admins.json`), RDP logons (4624 type 10, public source IPs flagged), recently created scheduled tasks, suspicious startup entries (Run/RunOnce for machine + all loaded users, Startup folders; script hosts, download one-liners, unsigned exes in user-writable paths), unsigned running processes, external network connections (backdoor/IRC/Tor ports, unsigned callers), recently installed software, new unsigned files in System32/drivers, Defender detections + last scan, hosts-file tampering.
+- **Vulnerability Exposure:** every Security tab check. 4 new checks added to the Security tab for this (now 40): weak passwords (blank-password test via one empty-password network logon for accounts with PasswordRequired=False — logs one 4625 per such account; min length; lockout), WinRM listener, PowerShell execution policy, BIOS age.
+- Event 4672 (special privileges) deliberately left out — it fires on every admin logon, so it's noise rather than signal.
+- **Scoring:** compromise level (any HIGH-severity FAIL → CRITICAL) and exposure level from the Security scoring; overall = the worse of the two. New INFO status for "listed for review" items (no penalty).
+- Each finding shows severity, description and a recommended action, plus a button to open the relevant console (Event Viewer, Task Scheduler, Task Manager...).
+- **Export:** `logs/threat_report_<PC>_<timestamp>.html` + `.txt` with machine/OS/user/timestamp header.
+- Event-log checks report UNKNOWN when not elevated (Get-WinEvent otherwise falsely reports "no events").
+
 ### #10 — Expand Security tab with more vulnerability checks ✓
 **Completed:** 2026-11-12 (needs a test run on a real machine — see below)
-**Result:** 36 checks (was 23). Check definitions moved to `modules/security_checks.py` and report builders to `modules/security_report.py` so #13 can reuse both.
+**Result:** 36 checks (was 23; 40 after #13). Check definitions moved to `modules/security_checks.py` and report builders to `modules/security_report.py` so #13 can reuse both.
 - **13 new checks:** open listening ports, shared folder exposure (Everyone/Guest), LLMNR/NetBIOS poisoning, local admin accounts, LAPS status, running services audit (SNMP/UPnP/WinRM/FTP/IIS/sshd/TeamViewer/AnyDesk/VNC…), suspicious scheduled tasks (unsigned exes in user-writable paths, encoded/download one-liners), known-vulnerable/EOL software (static `KNOWN_VULNERABLE` list — review periodically), machine certificate expiry, AutoRun on removable drives, Secure Boot/UEFI/TPM, driver health/outdated drivers, USB mass storage policy.
 - **Categories:** Network / Accounts / System / Policy / Hardware; within a category failures sort first. Each row shows a severity badge.
 - **Risk score:** CLEAN/LOW/MEDIUM/HIGH/CRITICAL level (same scale #13 will use) + 0–100 score from weighted severity×status penalties.

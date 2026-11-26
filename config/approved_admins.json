@@ -1,0 +1,4 @@
+{
+  "_comment": "Accounts allowed in the local Administrators group. Match by full name (DOMAIN\\user) or just the user/group name, case-insensitive. The built-in Administrator (RID 500) is always allowed.",
+  "approved": ["Administrator", "Domain Admins"]
+}

@@ -1,29 +1,47 @@
-import re
-import customtkinter as ctk
+"""Apps: install standard, team and local software in one table.
+
+Each app shows whether it's already installed: a fast registry check first, then
+`winget export` in the background for exact IDs and versions.
+"""
+import csv
+import datetime
 import json
 import os
+import re
 import threading
+import tkinter as tk
+import tkinter.filedialog as filedialog
 import tkinter.messagebox as msgbox
-from modules.runner import run_winget, run_winget_uninstall, run_local_installer, run_inline_powershell
-from modules.utils import resolve_installer_path
+
+import customtkinter as ctk
+
+from modules.installed_apps import match_registry, registry_programs, winget_installed
 from modules.logger import log
+from modules.runner import run_inline_powershell, run_local_installer, run_winget, run_winget_uninstall
+from modules.utils import resolve_installer_path
+from ui import theme as T
+from ui.widgets import ActionBar, LogDrawer, confirm_run, tile_row, tip
 
 CONFIG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config")
-
-_ANSI_RE = re.compile(r'\x1b\[[0-9;]*[mGKHF]|\r')
 
 _DL_RE = re.compile(
     r'([\d,]+\.?\d*)\s*(B|KB|MB|GB)\s*/\s*([\d,]+\.?\d*)\s*(B|KB|MB|GB)',
     re.IGNORECASE
 )
 _UNITS = {'B': 1, 'KB': 1024, 'MB': 1024 ** 2, 'GB': 1024 ** 3}
+_COLS = (30, 230, 260, 70, 150)   # tick, app, source, list, status (px, unscaled); menu stretches
+_LIST_COLOR = {"COMMON": "MUTED", "TEAM": "INFO", "LOCAL": "WARN"}
 
 
 def _to_bytes(val_str, unit):
     return float(val_str.replace(',', '')) * _UNITS[unit.upper()]
 
 
+_ANSI_RE = re.compile(r'\x1b\[[0-9;]*[mGKHF]|\r')
+
+
 def _parse_winget_list(output: str) -> list:
+    """[{"name", "id"}] from `winget list` table output."""
     lines = [_ANSI_RE.sub("", l) for l in output.splitlines()]
     sep_idx = next((i for i, l in enumerate(lines) if re.match(r'^-{10,}', l.strip())), -1)
     if sep_idx < 0:
@@ -39,231 +57,336 @@ def _parse_winget_list(output: str) -> list:
     return apps
 
 
+def _scriptable(winget_id: str) -> bool:
+    """True when the ID can be reinstalled with `winget install --id` (not ARP/MSIX/truncated)."""
+    return ("." in winget_id and "\\" not in winget_id
+            and not winget_id.endswith(("…", "...")))
+
+
 class AppsTab(ctk.CTkFrame):
     def __init__(self, master, role):
         super().__init__(master, fg_color="transparent")
         self.role = role
-        self.common_checkboxes = {}
-        self.team_checkboxes = {}
-        self.local_checkboxes = {}
-        self.uninstall_checkboxes = {}
         self._running = False
         self._stop_requested = False
         self._current_process = None
-        self._audit_results = {"approved": [], "unknown": []}
-        self._audit_checkboxes = {}
+        self._vars = {}           # key -> BooleanVar (kept across filter / team changes)
+        self._entries = []        # [{"key", "app", "list"}] for common + current team + local
+        self._reg = None          # registry programs [(name, ver)]
+        self._wg = None           # {winget_id_lower: version} once winget export finishes
+        self._wg_state = "idle"   # idle / running / done / failed
+        self._filter = "All"
         self._load_config()
+        self.team_var = ctk.StringVar(value=list(self.teams_data["teams"].keys())[0])
         self._build()
+        self._rebuild_entries()
+        self._check_installed()
 
     def _load_config(self):
-        with open(os.path.join(CONFIG_DIR, "apps_common.json")) as f:
+        with open(os.path.join(CONFIG_DIR, "apps_common.json"), encoding="utf-8") as f:
             self.common_data = json.load(f)
-        with open(os.path.join(CONFIG_DIR, "apps_teams.json")) as f:
+        with open(os.path.join(CONFIG_DIR, "apps_teams.json"), encoding="utf-8") as f:
             self.teams_data = json.load(f)
         local_path = os.path.join(CONFIG_DIR, "apps_local.json")
         if os.path.exists(local_path):
-            with open(local_path) as f:
+            with open(local_path, encoding="utf-8") as f:
                 self.local_data = json.load(f)
         else:
             self.local_data = {"local_apps": []}
 
-    # ── Build UI ───────────────────────────────────────────────────
+    # ── Build ──────────────────────────────────────────────────────
 
     def _build(self):
-        self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(2, weight=1)
 
-        # Scrollable wrapper so output is always reachable
-        self._wrap = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        self._wrap.grid(row=0, column=0, sticky="nsew")
-        self._wrap.grid_columnconfigure(0, weight=1)
-        self._wrap.grid_columnconfigure(1, weight=1)
-        w = self._wrap
+        tiles_host = ctk.CTkFrame(self, fg_color="transparent")
+        tiles_host.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        tiles_host.grid_columnconfigure(0, weight=1)
+        row, self._tiles = tile_row(tiles_host, [
+            ("Selected", "0", T.ACCENT, "will be installed"),
+            ("Already installed", "…", T.MUTED, "checking this PC…"),
+            ("Team", self.team_var.get(), T.INFO, ""),
+            ("Local installers", "0", T.DIM, ""),
+        ])
+        row.grid(row=0, column=0, sticky="ew")
 
-        # ── Common Apps card ──────────────────────────────────────
-        common_frame = ctk.CTkFrame(w)
-        common_frame.grid(row=0, column=0, padx=(10, 4), pady=(10, 4), sticky="nsew")
-        common_frame.grid_columnconfigure(0, weight=1)
-
-        ctk.CTkLabel(common_frame, text="Common Apps",
-                      font=ctk.CTkFont(size=15, weight="bold")).grid(
-            row=0, column=0, sticky="w", padx=16, pady=(16, 2))
-        ctk.CTkLabel(common_frame, text="Installed on all machines",
-                      text_color="gray", font=ctk.CTkFont(size=11)).grid(
-            row=1, column=0, sticky="w", padx=16, pady=(0, 6))
-
-        scroll_common = ctk.CTkScrollableFrame(common_frame, height=260)
-        scroll_common.grid(row=2, column=0, padx=10, pady=(0, 6), sticky="ew")
-        scroll_common.grid_columnconfigure(0, weight=1)
-
-        for i, app in enumerate(self.common_data["common_apps"]):
-            var = ctk.BooleanVar(value=True)
-            self._app_row(scroll_common, i, app, var, self.common_checkboxes)
-
-        common_btn_row = ctk.CTkFrame(common_frame, fg_color="transparent")
-        common_btn_row.grid(row=3, column=0, padx=12, pady=(4, 8), sticky="w")
-        self.common_btn = ctk.CTkButton(common_btn_row, text="Install Selected",
-                                         command=self._install_common)
-        self.common_btn.grid(row=0, column=0, padx=(0, 6))
-        ctk.CTkButton(common_btn_row, text="Select All", width=90,
-                       command=lambda: [v.set(True) for v, _ in self.common_checkboxes.values()]).grid(
-            row=0, column=1, padx=4)
-        ctk.CTkButton(common_btn_row, text="Deselect All", width=90,
-                       command=lambda: [v.set(False) for v, _ in self.common_checkboxes.values()]).grid(
-            row=0, column=2, padx=4)
-
-        common_prog = ctk.CTkFrame(common_frame, fg_color="transparent")
-        common_prog.grid(row=4, column=0, padx=16, pady=(0, 12), sticky="ew")
-        common_prog.grid_columnconfigure(0, weight=1)
-        self.common_bar = ctk.CTkProgressBar(common_prog, height=12)
-        self.common_bar.grid(row=0, column=0, sticky="ew")
-        self.common_bar.set(0)
-        self.common_status = ctk.CTkLabel(common_prog, text="", font=ctk.CTkFont(size=11), anchor="w")
-        self.common_status.grid(row=1, column=0, sticky="w", pady=(2, 0))
-
-        # ── Team Apps card ────────────────────────────────────────
-        team_frame = ctk.CTkFrame(w)
-        team_frame.grid(row=0, column=1, padx=(4, 10), pady=(10, 4), sticky="nsew")
-        team_frame.grid_columnconfigure(0, weight=1)
-
-        ctk.CTkLabel(team_frame, text="Team / Role Apps",
-                      font=ctk.CTkFont(size=15, weight="bold")).grid(
-            row=0, column=0, sticky="w", padx=16, pady=(16, 2))
-        ctk.CTkLabel(team_frame, text="Select Team:",
-                      font=ctk.CTkFont(size=12)).grid(
-            row=1, column=0, sticky="w", padx=16, pady=(0, 4))
-
-        self.team_var = ctk.StringVar(value=list(self.teams_data["teams"].keys())[0])
-        ctk.CTkOptionMenu(team_frame,
-                           values=list(self.teams_data["teams"].keys()),
-                           variable=self.team_var,
-                           command=self._on_team_change).grid(
-            row=2, column=0, padx=16, pady=(0, 6), sticky="w")
-
-        self.scroll_team = ctk.CTkScrollableFrame(team_frame, height=260)
-        self.scroll_team.grid(row=3, column=0, padx=10, pady=(0, 6), sticky="ew")
-        self.scroll_team.grid_columnconfigure(0, weight=1)
-        self._populate_team_apps(self.team_var.get())
-
-        team_btn_row = ctk.CTkFrame(team_frame, fg_color="transparent")
-        team_btn_row.grid(row=4, column=0, padx=12, pady=(4, 8), sticky="w")
-        self.team_btn = ctk.CTkButton(team_btn_row, text="Install Selected",
-                                       command=self._install_team)
-        self.team_btn.grid(row=0, column=0, padx=(0, 6))
-        ctk.CTkButton(team_btn_row, text="Select All", width=90,
-                       command=lambda: [v.set(True) for v, _ in self.team_checkboxes.values()]).grid(
-            row=0, column=1, padx=4)
-        ctk.CTkButton(team_btn_row, text="Deselect All", width=90,
-                       command=lambda: [v.set(False) for v, _ in self.team_checkboxes.values()]).grid(
-            row=0, column=2, padx=4)
-
-        team_prog = ctk.CTkFrame(team_frame, fg_color="transparent")
-        team_prog.grid(row=5, column=0, padx=16, pady=(0, 12), sticky="ew")
-        team_prog.grid_columnconfigure(0, weight=1)
-        self.team_bar = ctk.CTkProgressBar(team_prog, height=12)
-        self.team_bar.grid(row=0, column=0, sticky="ew")
-        self.team_bar.set(0)
-        self.team_status = ctk.CTkLabel(team_prog, text="", font=ctk.CTkFont(size=11), anchor="w")
-        self.team_status.grid(row=1, column=0, sticky="w", pady=(2, 0))
-
-        # ── Local / Offline Apps card ─────────────────────────────
-        local_frame = ctk.CTkFrame(w)
-        local_frame.grid(row=1, column=0, columnspan=2, padx=10, pady=(0, 4), sticky="ew")
-        local_frame.grid_columnconfigure(0, weight=1)
-
-        local_header = ctk.CTkFrame(local_frame, fg_color="transparent")
-        local_header.grid(row=0, column=0, sticky="ew", padx=16, pady=(16, 2))
-        local_header.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(local_header, text="Local / Offline Apps",
-                      font=ctk.CTkFont(size=15, weight="bold")).grid(row=0, column=0, sticky="w")
+        bar = ctk.CTkFrame(self, fg_color="transparent")
+        bar.grid(row=1, column=0, sticky="ew", pady=(0, 8))
+        bar.grid_columnconfigure(3, weight=1)
+        self._filter_btn = ctk.CTkSegmentedButton(bar, values=["All", "Common", "Team", "Local"],
+                                                  command=self._set_filter)
+        self._filter_btn.set("All")
+        self._filter_btn.grid(row=0, column=0)
+        tip(self._filter_btn, "Show all apps, or only one list")
+        ctk.CTkLabel(bar, text="TEAM", font=T.mono(10), text_color=T.MUTED).grid(
+            row=0, column=1, padx=(16, 6))
+        self._team_btn = ctk.CTkSegmentedButton(bar, values=list(self.teams_data["teams"].keys()),
+                                                variable=self.team_var, command=self._on_team_change)
+        self._team_btn.grid(row=0, column=2, sticky="w")
+        tip(self._team_btn, "Team preset: which role apps are listed")
+        right = ctk.CTkFrame(bar, fg_color="transparent")
+        right.grid(row=0, column=4, sticky="e")
+        self._recheck_btn = T.outline_button(right, text="Re-check", width=86, height=28,
+                                             command=self._check_installed)
+        self._recheck_btn.grid(row=0, column=0)
+        tip(self._recheck_btn, "Check again which apps are installed")
+        self._audit_btn = T.outline_button(right, text="Audit", width=70, height=28,
+                                           command=self._open_audit)
+        self._audit_btn.grid(row=0, column=2, padx=(8, 0))
+        tip(self._audit_btn, "Software audit: list every installed app, flag ones not in the approved "
+                             "lists, and build a reinstall script")
         if self.role == "admin":
-            ctk.CTkButton(local_header, text="+ Add App", width=100,
-                           command=self._add_local_app_dialog).grid(row=0, column=1, sticky="e")
+            tip(T.outline_button(right, text="+ Local installer", width=130, height=28,
+                                 command=self._add_local_app_dialog),
+                "Add an .exe / .msi from this PC or a network share").grid(row=0, column=1, padx=(8, 0))
 
-        ctk.CTkLabel(local_frame, text="Installed from local or network path — no internet required",
-                      text_color="gray", font=ctk.CTkFont(size=11)).grid(
-            row=1, column=0, sticky="w", padx=16, pady=(0, 6))
+        table = ctk.CTkFrame(self, fg_color=T.PANEL, corner_radius=0)
+        table.grid(row=2, column=0, sticky="nsew")
+        table.grid_columnconfigure(0, weight=1)
+        table.grid_rowconfigure(0, weight=1)
+        self._rows = ctk.CTkScrollableFrame(table, fg_color="transparent", corner_radius=0)
+        self._rows.grid(row=0, column=0, sticky="nsew")
+        self._rows.grid_columnconfigure(0, weight=1)
 
-        self.scroll_local = ctk.CTkScrollableFrame(local_frame, height=120)
-        self.scroll_local.grid(row=2, column=0, padx=10, pady=(0, 6), sticky="ew")
-        self.scroll_local.grid_columnconfigure(0, weight=1)
-        self._refresh_local_apps()
-
-        local_btn_row = ctk.CTkFrame(local_frame, fg_color="transparent")
-        local_btn_row.grid(row=3, column=0, padx=16, pady=(0, 8), sticky="w")
-
-        self.local_btn = ctk.CTkButton(local_btn_row, text="Install Local Apps",
-                                        command=self._install_local)
-        self.local_btn.grid(row=0, column=0, padx=(0, 8))
-        ctk.CTkButton(local_btn_row, text="Select All", width=90,
-                       command=lambda: [v.set(True) for v, _ in self.local_checkboxes.values()]).grid(
-            row=0, column=1, padx=4)
-        ctk.CTkButton(local_btn_row, text="Deselect All", width=90,
-                       command=lambda: [v.set(False) for v, _ in self.local_checkboxes.values()]).grid(
-            row=0, column=2, padx=4)
-
-        local_prog = ctk.CTkFrame(local_frame, fg_color="transparent")
-        local_prog.grid(row=4, column=0, padx=16, pady=(0, 12), sticky="ew")
-        local_prog.grid_columnconfigure(0, weight=1)
-        self.local_bar = ctk.CTkProgressBar(local_prog, height=12)
-        self.local_bar.grid(row=0, column=0, sticky="ew")
-        self.local_bar.set(0)
-        self.local_status = ctk.CTkLabel(local_prog, text="", font=ctk.CTkFont(size=11), anchor="w")
-        self.local_status.grid(row=1, column=0, sticky="w", pady=(2, 0))
-
-        # ── Download progress (hidden until active) ────────────────
-        self.dl_frame = ctk.CTkFrame(w, fg_color="transparent")
-        self.dl_frame.grid(row=2, column=0, columnspan=2, padx=10, pady=(0, 4), sticky="ew")
+        # Download line (hidden until a winget download reports progress)
+        self.dl_frame = ctk.CTkFrame(self, fg_color=T.PANEL_2, corner_radius=0)
+        self.dl_frame.grid(row=3, column=0, sticky="ew", pady=(6, 0))
         self.dl_frame.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(self.dl_frame, text="DOWNLOADING", font=T.mono(9, "bold"), text_color=T.DIM).grid(
+            row=0, column=0, padx=(12, 8), pady=6)
+        self.dl_app_label = ctk.CTkLabel(self.dl_frame, text="", font=T.ui(12), anchor="w")
+        self.dl_app_label.grid(row=0, column=1, sticky="w")
+        self.dl_size_label = ctk.CTkLabel(self.dl_frame, text="", font=T.mono(11), text_color=T.MUTED)
+        self.dl_size_label.grid(row=0, column=2, padx=12)
+        self.dl_bar = ctk.CTkProgressBar(self.dl_frame, height=4, corner_radius=0)
+        self.dl_bar.grid(row=1, column=0, columnspan=3, sticky="ew")
+        self.dl_bar.set(0)
         self.dl_frame.grid_remove()
 
-        ctk.CTkLabel(self.dl_frame, text="Downloading:",
-                      font=ctk.CTkFont(size=12, weight="bold")).grid(
-            row=0, column=0, padx=(16, 8), pady=(10, 2), sticky="w")
-        self.dl_app_label = ctk.CTkLabel(self.dl_frame, text="",
-                                          font=ctk.CTkFont(size=12))
-        self.dl_app_label.grid(row=0, column=1, pady=(10, 2), sticky="w")
-        self.dl_size_label = ctk.CTkLabel(self.dl_frame, text="",
-                                           font=ctk.CTkFont(size=11), text_color="gray")
-        self.dl_size_label.grid(row=0, column=2, padx=(8, 16), pady=(10, 2), sticky="e")
+        self._log = LogDrawer(self)
+        self._log.grid(row=4, column=0, sticky="ew", pady=(6, 0))
 
-        self.dl_bar = ctk.CTkProgressBar(self.dl_frame, height=14)
-        self.dl_bar.grid(row=1, column=0, columnspan=3, padx=16, pady=(2, 10), sticky="ew")
-        self.dl_bar.set(0)
+        self._action = ActionBar(self)
+        self._action.grid(row=5, column=0, sticky="ew", pady=(6, 0))
+        self._action.button("Select all", self._select_all, outline=True, width=96,
+                            tip_text="Tick every app shown (Ctrl+A)")
+        self._action.button("Select none", self._deselect_all, outline=True, width=96,
+                            tip_text="Untick every app (Ctrl+Shift+A)")
+        self.stop_btn = self._action.button("Stop", self._stop_install, danger=True, width=70,
+                                            state="disabled",
+                                            tip_text="Cancel after the current app finishes")
+        self._install_btn = self._action.button("Install", self._install_selected, width=160,
+                                                tip_text="Install the ticked apps (Ctrl+Enter). "
+                                                         "You'll see the list first.")
 
-        # ── Output ────────────────────────────────────────────────
-        output_hdr = ctk.CTkFrame(w, fg_color="transparent")
-        output_hdr.grid(row=3, column=0, columnspan=2, padx=10, pady=(4, 2), sticky="ew")
-        output_hdr.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(output_hdr, text="Output",
-                      font=ctk.CTkFont(size=14, weight="bold")).grid(row=0, column=0, sticky="w")
-        self.stop_btn = ctk.CTkButton(output_hdr, text="Stop", width=80,
-                                       fg_color="#d32f2f", hover_color="#b71c1c",
-                                       state="disabled", command=self._stop_install)
-        self.stop_btn.grid(row=0, column=1, sticky="e")
+    @staticmethod
+    def _layout_cols(frame):
+        scale = ctk.ScalingTracker.get_widget_scaling(frame)
+        for i, w in enumerate(_COLS):
+            frame.grid_columnconfigure(i, minsize=round(w * scale))
+        frame.grid_columnconfigure(len(_COLS), weight=1)
 
-        self.output_box = ctk.CTkTextbox(w, height=120, state="disabled")
-        self.output_box.grid(row=4, column=0, columnspan=2, padx=10, pady=(0, 10), sticky="ew")
+    # ── Entries / state ────────────────────────────────────────────
 
-    def _app_row(self, parent, row_idx, app, var, checkbox_dict):
-        row = ctk.CTkFrame(parent, fg_color="transparent")
-        row.grid(row=row_idx, column=0, sticky="ew", pady=2, padx=4)
-        row.grid_columnconfigure(0, weight=1)
+    def _rebuild_entries(self):
+        team = self.team_var.get()
+        entries = [{"key": f"common:{a.get('winget_id', a['name'])}", "app": a, "list": "COMMON"}
+                   for a in self.common_data["common_apps"]]
+        entries += [{"key": f"team:{a.get('winget_id', a['name'])}", "app": a, "list": "TEAM"}
+                    for a in self.teams_data["teams"].get(team, [])]
+        entries += [{"key": f"local:{a['name']}", "app": a, "list": "LOCAL"}
+                    for a in self.local_data.get("local_apps", [])]
+        self._entries = entries
+        for e in entries:
+            if e["key"] not in self._vars:
+                var = ctk.BooleanVar(value=self._installed_version(e) is None and self._known())
+                var.trace_add("write", lambda *_: self._update_counts())
+                self._vars[e["key"]] = var
+        self._render()
 
-        ctk.CTkCheckBox(row, text=app["name"], variable=var).grid(
-            row=0, column=0, sticky="w")
+    def _known(self):
+        return self._reg is not None
 
+    def _installed_version(self, entry):
+        """Version string ('' if unknown) when installed, None when not (or not checked yet)."""
+        app = entry["app"]
+        if self._wg is not None and app.get("winget_id"):
+            v = self._wg.get(app["winget_id"].lower())
+            if v is not None:
+                return v
+        if self._reg is not None:
+            return match_registry(app, self._reg)
+        return None
+
+    def _check_installed(self):
+        """Registry now (instant), winget export in the background."""
+        self._reg = registry_programs()
+        for e in self._entries:   # default: tick apps that aren't installed yet
+            self._vars[e["key"]].set(self._installed_version(e) is None)
+        already_running = self._wg_state == "running"
+        self._wg_state = "running"
+        self._recheck_btn.configure(state="disabled", text="Checking…")
+        self._render()
+        if already_running:
+            return
+
+        def task():
+            res = winget_installed()
+            try:
+                self.after(0, self._apply_winget, res)
+            except RuntimeError:
+                pass
+        threading.Thread(target=task, daemon=True).start()
+
+    def _apply_winget(self, res):
+        if not self.winfo_exists():
+            return
+        self._wg = res if res is not None else self._wg
+        self._wg_state = "done" if res is not None else "failed"
+        self._recheck_btn.configure(state="normal", text="Re-check")
+        for e in self._entries:   # untick anything winget found that the registry missed
+            if self._installed_version(e) is not None and self._vars[e["key"]].get():
+                self._vars[e["key"]].set(False)
+        self._render()
+
+    def _set_filter(self, value):
+        self._filter = value
+        self._render()
+
+    def _on_team_change(self, team_name):
+        self._rebuild_entries()
+
+    def _visible(self):
+        f = self._filter.upper()
+        return [e for e in self._entries if f == "ALL" or e["list"] == f]
+
+    # ── Render ─────────────────────────────────────────────────────
+
+    def _render(self):
+        for w in self._rows.winfo_children():
+            w.destroy()
+        head = ctk.CTkFrame(self._rows, fg_color=T.PANEL_2, corner_radius=0, height=26)
+        head.grid(row=0, column=0, sticky="ew")
+        head.grid_propagate(False)
+        head.grid_rowconfigure(0, weight=1)
+        self._layout_cols(head)
+        for i, text in enumerate(["", "APP", "SOURCE", "LIST", "STATUS"]):
+            ctk.CTkLabel(head, text=text, font=T.mono(9, "bold"), text_color=T.DIM,
+                         anchor="w").grid(row=0, column=i, sticky="w", padx=(10 if i == 0 else 0, 0))
+
+        visible = self._visible()
+        for i, e in enumerate(visible):
+            self._add_row(i + 1, e)
+        if not visible:
+            msg = ("No local installers yet." + (" Click “+ Local installer” to add one."
+                                                 if self.role == "admin" else "")
+                   if self._filter == "Local" else "No apps in this list.")
+            ctk.CTkLabel(self._rows, text=msg, font=T.ui(12), text_color=T.MUTED).grid(
+                row=1, column=0, pady=30)
+        self._update_counts()
+
+    def _add_row(self, r, entry):
+        app, lst = entry["app"], entry["list"]
+        ver = self._installed_version(entry)
+        installed = ver is not None
+        row = ctk.CTkFrame(self._rows, fg_color=T.PANEL if r % 2 else T.PANEL_2, corner_radius=0,
+                           height=32)
+        row.grid(row=r, column=0, sticky="ew")
+        row.grid_propagate(False)
+        row.grid_rowconfigure(0, weight=1)
+        self._layout_cols(row)
+        ctk.CTkCheckBox(row, text="", variable=self._vars[entry["key"]], width=20,
+                        checkbox_width=16, checkbox_height=16).grid(row=0, column=0, padx=(10, 0), sticky="w")
+        ctk.CTkLabel(row, text=app["name"], font=T.ui(12, "bold"),
+                     text_color=T.MUTED if installed else T.TEXT_BRIGHT, anchor="w").grid(
+            row=0, column=1, sticky="w")
+        source = app.get("winget_id") or app.get("installer", "")
+        src_lbl = ctk.CTkLabel(row, text=source if len(source) <= 34 else "…" + source[-33:],
+                               font=T.mono(10), text_color=T.MUTED, anchor="w")
+        src_lbl.grid(row=0, column=2, sticky="w")
+        tip(src_lbl, source)
+        ctk.CTkLabel(row, text=lst, font=T.mono(9, "bold"),
+                     text_color=getattr(T, _LIST_COLOR[lst])).grid(row=0, column=3, sticky="w")
+        if installed:
+            text, color = (f"INSTALLED {ver}" if ver else "INSTALLED"), T.OK
+        elif self._reg is None:
+            text, color = "…", T.DIM
+        else:
+            text, color = "NOT INSTALLED", T.DIM
+        ctk.CTkLabel(row, text=text[:22], font=T.mono(9, "bold"), text_color=color, anchor="w").grid(
+            row=0, column=4, sticky="w")
+        more = T.outline_button(row, text="⋯", width=30, height=22, border_width=0,
+                                command=lambda e=entry: None)
+        more.configure(command=lambda e=entry, b=more: self._row_menu(e, b))
+        more.grid(row=0, column=5, sticky="e", padx=10)
+        tip(more, "More actions")
+
+    def _row_menu(self, entry, button):
+        app = entry["app"]
+        menu = tk.Menu(self, tearoff=0, bg=T.PANEL_2, fg=T.TEXT, activebackground=T.PANEL_3,
+                       activeforeground=T.TEXT_BRIGHT, bd=0)
         if app.get("winget_id"):
-            ctk.CTkButton(
-                row, text="Uninstall", width=75, height=24,
-                fg_color="#555", hover_color="#E65100",
-                font=ctk.CTkFont(size=11),
-                command=lambda wid=app["winget_id"], n=app["name"]: self._uninstall_single(wid, n)
-            ).grid(row=0, column=1, padx=(8, 0))
+            menu.add_command(label=f"Uninstall {app['name']}…",
+                             command=lambda: self._uninstall_single(app["winget_id"], app["name"]))
+        if entry["list"] == "LOCAL" and self.role == "admin":
+            menu.add_command(label="Remove from local list", command=lambda: self._remove_local_app(app))
+        if menu.index("end") is None:
+            menu.add_command(label="No actions", state="disabled")
+        menu.tk_popup(button.winfo_rootx(), button.winfo_rooty() + button.winfo_height())
 
-        checkbox_dict[app.get("winget_id", app["name"])] = (var, app)
+    def _selected(self):
+        return [e for e in self._entries if self._vars[e["key"]].get()]
 
-    # ── Download progress helpers ──────────────────────────────────
+    def _update_counts(self):
+        if not hasattr(self, "_install_btn") or not self.winfo_exists():
+            return
+        sel = self._selected()
+        listed = [e for e in self._entries if e["list"] != "LOCAL"]
+        inst = [e for e in listed if self._installed_version(e) is not None]
+        reinstall = sum(1 for e in sel if self._installed_version(e) is not None)
+        self._tiles["Selected"].set(len(sel), T.ACCENT,
+                                    f"{reinstall} already installed" if reinstall else "will be installed")
+        if self._reg is None:
+            self._tiles["Already installed"].set("…", T.MUTED, "checking this PC…")
+        else:
+            note = {"running": " · refining with winget…", "failed": " · winget unavailable"}.get(self._wg_state, "")
+            self._tiles["Already installed"].set(len(inst), T.OK if inst else T.MUTED,
+                                                 f"of {len(listed)} listed apps{note}")
+        team = self.team_var.get()
+        self._tiles["Team"].set(team if len(team) <= 14 else team[:13] + "…", T.INFO,
+                                f"{len(self.teams_data['teams'].get(team, []))} apps in this preset")
+        n_local = len(self.local_data.get("local_apps", []))
+        self._tiles["Local installers"].set(n_local, T.WARN if n_local else T.DIM,
+                                            "configured" if n_local else "none configured")
+        if self._running:
+            return
+        noun = "app" if len(sel) == 1 else "apps"
+        self._install_btn.configure(text=f"Install {len(sel)} {noun}", state="normal" if sel else "disabled")
+        hidden = len(sel) - len([e for e in sel if e in self._visible()])
+        if sel:
+            extra = f" · {reinstall} already installed (will reinstall)" if reinstall else ""
+            extra += f" · {hidden} in other lists" if hidden else ""
+            self._action.set_summary(f"{len(sel)} {noun} selected{extra}")
+        else:
+            self._action.set_summary("Tick the apps to install")
+
+    # ── Helpers ────────────────────────────────────────────────────
+
+    def _select_all(self):
+        for e in self._visible():
+            self._vars[e["key"]].set(True)
+
+    def _deselect_all(self):
+        for v in self._vars.values():
+            v.set(False)
+
+    # Keyboard shortcuts (see ui/widgets.py)
+    shortcut_select_all = _select_all
+    shortcut_deselect_all = _deselect_all
+
+    def shortcut_apply(self):
+        self._install_selected()
 
     def _show_dl_frame(self, app_name):
         self.dl_app_label.configure(text=app_name)
@@ -273,9 +396,6 @@ class AppsTab(ctk.CTkFrame):
 
     def _hide_dl_frame(self):
         self.dl_frame.grid_remove()
-        self.dl_bar.set(0)
-        self.dl_app_label.configure(text="")
-        self.dl_size_label.configure(text="")
 
     def _update_dl_bar(self, pct, size_text):
         self.dl_bar.set(pct)
@@ -297,94 +417,20 @@ class AppsTab(ctk.CTkFrame):
                 self._safe_append(line)
         return cb
 
-        # ── Software Audit card ────────────────────────────────────
-        audit_card = ctk.CTkFrame(w)
-        audit_card.grid(row=5, column=0, columnspan=2, padx=10, pady=(0, 10), sticky="ew")
-        audit_card.grid_columnconfigure(0, weight=1)
-
-        audit_hdr = ctk.CTkFrame(audit_card, fg_color="transparent")
-        audit_hdr.grid(row=0, column=0, sticky="ew", padx=16, pady=(14, 2))
-        audit_hdr.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(audit_hdr, text="Software Audit  /  Reinstall Backup",
-                     font=ctk.CTkFont(size=14, weight="bold")).grid(row=0, column=0, sticky="w")
-        self._audit_btn = ctk.CTkButton(audit_hdr, text="Scan Installed Apps", width=155,
-                                         command=self._run_audit)
-        self._audit_btn.grid(row=0, column=1, sticky="e")
-
-        ctk.CTkLabel(audit_card,
-                     text="Scan → check apps → Save .ps1 or Copy to clipboard → paste on fresh system to reinstall.",
-                     text_color="gray", font=ctk.CTkFont(size=11)).grid(
-            row=1, column=0, sticky="w", padx=16, pady=(0, 4))
-
-        self._audit_status = ctk.CTkLabel(audit_card, text="", font=ctk.CTkFont(size=11))
-        self._audit_status.grid(row=2, column=0, padx=16, pady=(0, 4), sticky="w")
-
-        self._audit_scroll = ctk.CTkScrollableFrame(audit_card, height=260)
-        self._audit_scroll.grid(row=3, column=0, padx=16, pady=(0, 6), sticky="ew")
-        self._audit_scroll.grid_columnconfigure(1, weight=1)
-
-        audit_action_row = ctk.CTkFrame(audit_card, fg_color="transparent")
-        audit_action_row.grid(row=4, column=0, padx=16, pady=(0, 14), sticky="w")
-
-        ctk.CTkButton(audit_action_row, text="Select All", width=90,
-                       command=lambda: [v.set(True) for v, _ in self._audit_checkboxes.values()]).grid(
-            row=0, column=0, padx=(0, 4))
-        ctk.CTkButton(audit_action_row, text="Deselect All", width=90,
-                       command=lambda: [v.set(False) for v, _ in self._audit_checkboxes.values()]).grid(
-            row=0, column=1, padx=4)
-
-        ctk.CTkFrame(audit_action_row, fg_color="gray40", width=1, height=24).grid(
-            row=0, column=2, padx=10)
-
-        self._audit_copy_btn = ctk.CTkButton(audit_action_row, text="Copy Script", width=110,
-                                              fg_color="#2e7d32", hover_color="#1b5e20",
-                                              command=self._audit_copy_clipboard, state="disabled")
-        self._audit_copy_btn.grid(row=0, column=3, padx=4)
-
-        self._audit_save_btn = ctk.CTkButton(audit_action_row, text="Save .ps1", width=100,
-                                              fg_color="#1565C0", hover_color="#0d3c6e",
-                                              command=self._audit_save_script, state="disabled")
-        self._audit_save_btn.grid(row=0, column=4, padx=4)
-
-        self._audit_export_btn = ctk.CTkButton(audit_action_row, text="Export CSV", width=100,
-                                                fg_color="#555", hover_color="#444",
-                                                command=self._audit_export_csv, state="disabled")
-        self._audit_export_btn.grid(row=0, column=5, padx=4)
-
-        ctk.CTkFrame(audit_action_row, fg_color="gray40", width=1, height=24).grid(
-            row=0, column=6, padx=10)
-
-        self._audit_install_btn = ctk.CTkButton(audit_action_row, text="Install Selected Now", width=150,
-                                                  fg_color="#E65100", hover_color="#BF360C",
-                                                  command=self._audit_install_unknown, state="disabled")
-        self._audit_install_btn.grid(row=0, column=7, padx=4)
-
-    # ── Helpers ────────────────────────────────────────────────────
-
-    def _populate_team_apps(self, team_name):
-        for widget in self.scroll_team.winfo_children():
-            widget.destroy()
-        self.team_checkboxes.clear()
-        for i, app in enumerate(self.teams_data["teams"].get(team_name, [])):
-            var = ctk.BooleanVar(value=True)
-            self._app_row(self.scroll_team, i, app, var, self.team_checkboxes)
-
-    def _on_team_change(self, team_name):
-        self._populate_team_apps(team_name)
-
     def _append_output(self, text):
-        self.output_box.configure(state="normal")
-        self.output_box.insert("end", text + "\n")
-        self.output_box.see("end")
-        self.output_box.configure(state="disabled")
+        self._log.append(text)
 
     def _safe_append(self, text):
         self.after(0, self._append_output, text)
 
-    def _set_all_buttons(self, state):
-        for btn in (self.common_btn, self.team_btn, self.local_btn, self._audit_btn):
-            btn.configure(state=state)
-        self.stop_btn.configure(state="normal" if state == "disabled" else "disabled")
+    def _set_running(self, running):
+        self._running = running
+        self._install_btn.configure(state="disabled" if running else "normal")
+        self.stop_btn.configure(state="normal" if running else "disabled")
+        self._team_btn.configure(state="disabled" if running else "normal")
+        if not running:
+            self._action.progress(None)
+            self._update_counts()
 
     def _stop_install(self):
         self._stop_requested = True
@@ -398,43 +444,24 @@ class AppsTab(ctk.CTkFrame):
     def _show_done_dialog(self, succeeded, failed, total, action="installed"):
         dialog = ctk.CTkToplevel(self)
         dialog.title("Complete")
-        dialog.geometry("320x170")
+        dialog.geometry("320x190")
         dialog.resizable(False, False)
-        dialog.grab_set()
+        dialog.transient(self.winfo_toplevel())
+        dialog.after(60, lambda: dialog.winfo_exists() and dialog.grab_set())
         dialog.lift()
         dialog.focus_force()
-        ctk.CTkLabel(dialog, text="Operation Complete",
-                      font=ctk.CTkFont(size=15, weight="bold")).pack(pady=(22, 8))
-        body = f"Successfully {action}: {succeeded}\nFailed: {failed}\nTotal: {total}"
-        ctk.CTkLabel(dialog, text=body, font=ctk.CTkFont(size=13), justify="left").pack(pady=(0, 14))
+        ctk.CTkLabel(dialog, text="▸  " + action.upper(), font=T.mono(13, "bold"),
+                     text_color=T.ACCENT).pack(pady=(22, 8))
+        body = f"Succeeded: {succeeded}\nFailed:    {failed}\nTotal:     {total}"
+        ctk.CTkLabel(dialog, text=body, font=T.mono(12), justify="left").pack(pady=(0, 14))
         ctk.CTkButton(dialog, text="OK", width=90, command=dialog.destroy).pack()
+        dialog.bind("<Return>", lambda e: dialog.destroy())
+        dialog.bind("<Escape>", lambda e: dialog.destroy())
 
     # ── Local app management (admin only) ─────────────────────────
 
     def _refresh_local_apps(self):
-        for widget in self.scroll_local.winfo_children():
-            widget.destroy()
-        self.local_checkboxes.clear()
-        local_apps = self.local_data.get("local_apps", [])
-        if local_apps:
-            for idx, app in enumerate(local_apps):
-                var = ctk.BooleanVar(value=True)
-                row_frame = ctk.CTkFrame(self.scroll_local, fg_color="transparent")
-                row_frame.grid(row=idx, column=0, sticky="ew", pady=2)
-                ctk.CTkCheckBox(row_frame, text=app["name"], variable=var).grid(
-                    row=0, column=0, sticky="w", padx=8)
-                if self.role == "admin":
-                    ctk.CTkButton(row_frame, text="✕", width=28, height=24,
-                                   fg_color="#555555", hover_color="#d32f2f",
-                                   command=lambda a=app: self._remove_local_app(a)).grid(
-                        row=0, column=1, padx=(4, 0))
-                self.local_checkboxes[app["name"]] = (var, app)
-        else:
-            msg = "No local apps configured. Click '+ Add App' to add one." if self.role == "admin" \
-                  else "No local apps configured."
-            ctk.CTkLabel(self.scroll_local, text=msg,
-                          text_color="gray", font=ctk.CTkFont(size=11)).grid(
-                row=0, column=0, sticky="w", padx=8, pady=8)
+        self._rebuild_entries()
 
     def _add_local_app_dialog(self):
         from tkinter import filedialog
@@ -442,7 +469,8 @@ class AppsTab(ctk.CTkFrame):
         dialog.title("Add Local App")
         dialog.geometry("500x230")
         dialog.resizable(False, False)
-        dialog.grab_set()
+        dialog.transient(self.winfo_toplevel())
+        dialog.after(60, lambda: dialog.winfo_exists() and dialog.grab_set())
         dialog.lift()
         dialog.focus_force()
         dialog.grid_columnconfigure(1, weight=1)
@@ -472,7 +500,7 @@ class AppsTab(ctk.CTkFrame):
                                    placeholder_text="e.g. /silent  or  /S  or  /quiet /norestart")
         args_entry.grid(row=2, column=1, columnspan=2, padx=(0, 16), pady=6, sticky="ew")
 
-        err_label = ctk.CTkLabel(dialog, text="", text_color="#ff6b6b", font=ctk.CTkFont(size=11))
+        err_label = ctk.CTkLabel(dialog, text="", text_color=T.FAIL, font=ctk.CTkFont(size=11))
         err_label.grid(row=3, column=0, columnspan=3, padx=16, pady=(0, 4), sticky="w")
 
         def confirm():
@@ -496,8 +524,7 @@ class AppsTab(ctk.CTkFrame):
         btn_row = ctk.CTkFrame(dialog, fg_color="transparent")
         btn_row.grid(row=4, column=0, columnspan=3, pady=(4, 16))
         ctk.CTkButton(btn_row, text="Add App", width=100, command=confirm).grid(row=0, column=0, padx=8)
-        ctk.CTkButton(btn_row, text="Cancel", width=100, fg_color="gray",
-                       hover_color="#555555", command=dialog.destroy).grid(row=0, column=1, padx=8)
+        T.outline_button(btn_row, text="Cancel", width=100, command=dialog.destroy).grid(row=0, column=1, padx=8)
 
     def _remove_local_app(self, app):
         self.local_data["local_apps"] = [
@@ -510,32 +537,41 @@ class AppsTab(ctk.CTkFrame):
         with open(path, "w") as f:
             json.dump(self.local_data, f, indent=4)
 
-    # ── Install (winget) ───────────────────────────────────────────
+    def _remove_local_app(self, app):
+        if not confirm_run(self, "Remove local installer", "This entry will be removed from the list "
+                           "(the installer file itself is not deleted):", [app["name"]],
+                           action_text="Remove"):
+            return
+        self.local_data["local_apps"] = [
+            a for a in self.local_data.get("local_apps", []) if a["name"] != app["name"]]
+        self._save_local_apps()
+        self._refresh_local_apps()
 
-    def _install_common(self):
+    # ── Install ────────────────────────────────────────────────────
+
+    def _install_selected(self):
         if self._running:
             return
-        selected = [app for _, (var, app) in self.common_checkboxes.items() if var.get()]
-        if not selected:
+        entries = self._selected()
+        if not entries:
             self._append_output("No apps selected.")
             return
-        self._run_installs(selected, self.common_bar, self.common_status)
-
-    def _install_team(self):
-        if self._running:
+        items = []
+        for e in entries:
+            ver = self._installed_version(e)
+            items.append((e["app"]["name"] + (f"  (already installed {ver})".rstrip() if ver is not None else ""),
+                          False))
+        if not confirm_run(self, "Install apps?", f"These {len(entries)} app(s) will be installed:",
+                           items, action_text=f"Install {len(entries)} app(s)",
+                           footer="Local installers may open their own setup window."
+                           if any(e["list"] == "LOCAL" for e in entries) else None):
             return
-        selected = [app for _, (var, app) in self.team_checkboxes.items() if var.get()]
-        if not selected:
-            self._append_output("No apps selected.")
-            return
-        self._run_installs(selected, self.team_bar, self.team_status)
+        self._run_installs([e["app"] for e in entries])
 
-    def _run_installs(self, apps, bar, status_label):
-        self._running = True
-        self._set_all_buttons("disabled")
+    def _run_installs(self, apps):
+        self._set_running(True)
         total = len(apps)
-        bar.set(0)
-        status_label.configure(text=f"Starting {total} installs...")
+        self._action.progress(0, f"Starting {total} installs…")
         self._append_output(f"Installing {total} app(s)...")
         log(f"Apps: installing {total} apps")
 
@@ -547,9 +583,7 @@ class AppsTab(ctk.CTkFrame):
                     self._safe_append("Installation stopped.")
                     break
                 name = app["name"]
-                _t = f"Installing {i + 1}/{total}: {name}"
-                self.after(0, lambda t=_t: status_label.configure(text=t))
-                self.after(0, self._show_dl_frame, name)
+                self.after(0, self._action.progress, i / total, f"Installing {i + 1} / {total}: {name}")
                 self._safe_append(f"Installing {name}...")
 
                 holder = []
@@ -557,18 +591,20 @@ class AppsTab(ctk.CTkFrame):
                     path = resolve_installer_path(app["installer"])
                     if not path:
                         self._safe_append(f"  ERROR: Installer not found: {app['installer']}")
+                        self._safe_append("  Check the path exists on this machine or network share.")
                         log(f"Installer not found: {app['installer']}", "error")
                         failed += 1
-                        self.after(0, bar.set, (i + 1) / total)
                         continue
-                    self._safe_append(f"  Launching installer — complete setup in popup window...")
+                    self._safe_append("  Launching installer — complete setup in popup window...")
                     log(f"Installing {name} (local: {path})")
                     rc, _ = run_local_installer(path, app.get("installer_args"),
                                                 callback=self._safe_append, process_holder=holder)
                 else:
+                    self.after(0, self._show_dl_frame, name)
                     log(f"Installing {name} ({app['winget_id']})")
                     rc, _ = run_winget(app["winget_id"], callback=self._make_dl_callback(name),
                                        process_holder=holder)
+                    self.after(0, self._hide_dl_frame)
                 if holder:
                     self._current_process = holder[0]
 
@@ -589,111 +625,47 @@ class AppsTab(ctk.CTkFrame):
                     self._safe_append(f"  FAILED: {name} (exit code {rc})")
                     log(f"Failed {name} exit={rc}", "error")
 
-                self.after(0, bar.set, (i + 1) / total)
-
             def finish():
-                bar.set(1.0)
                 self._hide_dl_frame()
-                status_label.configure(text=f"Done. {succeeded} ok, {failed} failed.")
-                self._running = False
                 self._stop_requested = False
                 self._current_process = None
-                self._set_all_buttons("normal")
+                self._set_running(False)
+                self._action.set_summary(f"Done: {succeeded} ok, {failed} failed.",
+                                         T.WARN if failed else T.OK)
+                self._check_installed()
                 self._show_done_dialog(succeeded, failed, total, "installed")
 
             self.after(0, finish)
 
         threading.Thread(target=task, daemon=True).start()
 
-    # ── Install (local) ────────────────────────────────────────────
+    # ── Software audit ─────────────────────────────────────────────
 
-    def _install_local(self):
-        if self._running:
+    def _approved_ids(self):
+        ids = {a["winget_id"].lower() for a in self.common_data.get("common_apps", []) if a.get("winget_id")}
+        for apps in self.teams_data.get("teams", {}).values():
+            ids.update(a["winget_id"].lower() for a in apps if a.get("winget_id"))
+        return ids
+
+    def _open_audit(self):
+        dlg = getattr(self, "_audit_dlg", None)
+        if dlg is not None and dlg.winfo_exists():
+            dlg.lift()
+            dlg.focus_force()
             return
-        selected = [app for _, (var, app) in self.local_checkboxes.items() if var.get()]
-        if not selected:
-            self._append_output("No local apps selected.")
-            return
+        self._audit_dlg = SoftwareAuditDialog(self)
 
-        self._running = True
-        self._set_all_buttons("disabled")
-        total = len(selected)
-        self.local_bar.set(0)
-        self.local_status.configure(text=f"Starting {total} installs...")
-        self._append_output(f"Installing {total} local app(s)...")
-        log(f"Apps: installing {total} local apps")
-
-        def task():
-            succeeded = 0
-            failed = 0
-            for i, app in enumerate(selected):
-                if self._stop_requested:
-                    self._safe_append("Installation stopped.")
-                    break
-                name = app["name"]
-                _t = f"Installing {i + 1}/{total}: {name}"
-                self.after(0, lambda t=_t: self.local_status.configure(text=t))
-                self._safe_append(f"Installing {name}...")
-                log(f"Installing {name} (local: {app['installer']})")
-
-                path = resolve_installer_path(app["installer"])
-                if not path:
-                    self._safe_append(f"  ERROR: Installer not found: {app['installer']}")
-                    self._safe_append(f"  Check the path exists on this machine or network share.")
-                    log(f"Installer not found: {app['installer']}", "error")
-                    failed += 1
-                    self.after(0, self.local_bar.set, (i + 1) / total)
-                    continue
-
-                self._safe_append(f"  Path: {path}")
-                self._safe_append(f"  Launching installer — complete setup in popup window...")
-                holder = []
-                rc, _ = run_local_installer(path, app.get("installer_args"),
-                                             callback=self._safe_append, process_holder=holder)
-                if holder:
-                    self._current_process = holder[0]
-
-                if self._stop_requested:
-                    self._safe_append("Installation stopped.")
-                    break
-
-                if rc == 0:
-                    succeeded += 1
-                    self._safe_append(f"  OK: {name} installed successfully.")
-                    log(f"Installed {name}", "success")
-                elif rc == 3010:
-                    succeeded += 1
-                    self._safe_append(f"  OK: {name} installed — reboot required to complete.")
-                    log(f"Installed {name} — reboot needed", "success")
-                else:
-                    failed += 1
-                    self._safe_append(f"  FAILED: {name} (exit code {rc})")
-                    self._safe_append(f"  Check installer path and silent args are correct.")
-                    log(f"Failed {name} exit={rc}", "error")
-
-                self.after(0, self.local_bar.set, (i + 1) / total)
-
-            def finish():
-                self.local_bar.set(1.0)
-                self.local_status.configure(text=f"Done. {succeeded} ok, {failed} failed.")
-                self._running = False
-                self._stop_requested = False
-                self._current_process = None
-                self._set_all_buttons("normal")
-                self._show_done_dialog(succeeded, failed, total, "installed")
-
-            self.after(0, finish)
-
-        threading.Thread(target=task, daemon=True).start()
-
-    # ── Inline Uninstall ───────────────────────────────────────────
+    # ── Uninstall (from the ⋯ menu) ────────────────────────────────
 
     def _uninstall_single(self, winget_id, name):
         if self._running:
             self._append_output("Wait for current operation to finish.")
             return
-        self._running = True
-        self._set_all_buttons("disabled")
+        if not confirm_run(self, "Uninstall app?", "This app will be uninstalled with winget:",
+                           [(f"{name}  ({winget_id})", True)], action_text="Uninstall", danger=True):
+            return
+        self._set_running(True)
+        self._action.progress(0.5, f"Uninstalling {name}…")
         self._append_output(f"Uninstalling {name}...")
         log(f"Uninstalling {name} ({winget_id})")
 
@@ -707,175 +679,262 @@ class AppsTab(ctk.CTkFrame):
                 log(f"Uninstall failed {name}", "error")
 
             def finish():
-                self._set_all_buttons("normal")
-                self._running = False
-
+                self._set_running(False)
+                self._action.set_summary(f"{name} uninstalled." if rc == 0 else f"Uninstall failed: {name} (exit {rc})",
+                                         T.OK if rc == 0 else T.FAIL)
+                self._check_installed()
             self.after(0, finish)
 
         threading.Thread(target=task, daemon=True).start()
 
-    # ── Software Audit ─────────────────────────────────────────────
 
-    def _audit_script_lines(self) -> list:
-        import datetime
-        checked = [app for wid, (var, app) in self._audit_checkboxes.items() if var.get()]
+class SoftwareAuditDialog(ctk.CTkToplevel):
+    """Scan everything installed (winget list), flag apps outside the approved lists,
+    and turn a selection into a winget reinstall script for a fresh machine."""
+
+    def __init__(self, tab):
+        super().__init__(tab)
+        self.tab = tab
+        self.title("Software audit")
+        self.geometry("820x600")
+        self.minsize(640, 420)
+        self.transient(tab.winfo_toplevel())
+        self.after(100, self.lift)
+        self.after(150, self.focus_force)
+        self._results = {"approved": [], "unknown": [], "no_id": []}
+        self._checks = {}   # winget id -> (BooleanVar, app)
+        self._build()
+        self._scan()
+
+    def _build(self):
+        self.configure(fg_color=T.BG)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(2, weight=1)
+
+        hdr = ctk.CTkFrame(self, fg_color="transparent")
+        hdr.grid(row=0, column=0, sticky="ew", padx=16, pady=(14, 4))
+        hdr.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(hdr, text="SOFTWARE AUDIT  ·  REINSTALL BACKUP", font=T.mono(13, "bold"),
+                     text_color=T.ACCENT, anchor="w").grid(row=0, column=0, sticky="w")
+        self._scan_btn = T.outline_button(hdr, text="Re-scan", width=86, height=28, command=self._scan)
+        self._scan_btn.grid(row=0, column=1)
+        tip(self._scan_btn, "Run winget list again")
+        ctk.CTkLabel(hdr, text="Tick apps, then save or copy the script and run it on a fresh machine "
+                               "to reinstall them.", font=T.ui(11), text_color=T.MUTED, anchor="w").grid(
+            row=1, column=0, columnspan=2, sticky="w")
+
+        tiles_host = ctk.CTkFrame(self, fg_color="transparent")
+        tiles_host.grid(row=1, column=0, sticky="ew", padx=16, pady=(6, 8))
+        tiles_host.grid_columnconfigure(0, weight=1)
+        row, self._tiles = tile_row(tiles_host, [
+            ("Installed", "…", T.MUTED, "scanning…"),
+            ("Not approved", "…", T.WARN, "outside common / team lists"),
+            ("Approved", "…", T.OK, "in common / team lists"),
+            ("No winget ID", "…", T.DIM, "cannot be scripted"),
+        ])
+        row.grid(row=0, column=0, sticky="ew")
+
+        table = ctk.CTkFrame(self, fg_color=T.PANEL, corner_radius=0)
+        table.grid(row=2, column=0, sticky="nsew", padx=16)
+        table.grid_columnconfigure(0, weight=1)
+        table.grid_rowconfigure(0, weight=1)
+        self._rows = ctk.CTkScrollableFrame(table, fg_color="transparent", corner_radius=0)
+        self._rows.grid(row=0, column=0, sticky="nsew")
+        self._rows.grid_columnconfigure(1, weight=1)
+
+        self._action = ActionBar(self)
+        self._action.grid(row=3, column=0, sticky="ew", padx=16, pady=(8, 14))
+        self._action.button("Select all", lambda: self._set_all(True), outline=True, width=86)
+        self._action.button("Select none", lambda: self._set_all(False), outline=True, width=90)
+        self._export_btn = self._action.button("Export CSV", self._export_csv, outline=True, width=96,
+                                               tip_text="Save the full audit (every app and its status)")
+        self._copy_btn = self._action.button("Copy script", self._copy_script, outline=True, width=100,
+                                             tip_text="Copy a winget reinstall script for the ticked apps")
+        self._save_btn = self._action.button("Save .ps1", self._save_script, outline=True, width=90,
+                                             tip_text="Save the reinstall script for the ticked apps")
+        self._install_btn = self._action.button("Install selected", self._install_selected, width=130,
+                                                tip_text="Install the ticked apps on this PC with winget")
+        self._set_buttons(False)
+        self._action.set_summary("Running winget list…")
+
+    # ── Scan ─────────────────────────────────────────────────────────
+
+    def _scan(self):
+        self._scan_btn.configure(state="disabled", text="Scanning…")
+        self._set_buttons(False)
+        for w in self._rows.winfo_children():
+            w.destroy()
+        self._checks.clear()
+        for name in self._tiles:
+            self._tiles[name].set("…", T.MUTED, None)
+        self._action.set_summary("Running winget list (can take a minute)…")
+        approved_ids = self.tab._approved_ids()
+
+        def task():
+            rc, out = run_inline_powershell(
+                "winget list --accept-source-agreements --disable-interactivity 2>&1 | Out-String -Width 400")
+            installed = _parse_winget_list(out)
+            try:
+                self.after(0, self._show, installed, approved_ids)
+            except RuntimeError:
+                pass
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _show(self, installed, approved_ids):
+        if not self.winfo_exists():
+            return
+        self._scan_btn.configure(state="normal", text="Re-scan")
+        if not installed:
+            self._tiles["Installed"].set(0, T.FAIL, "winget list failed")
+            self._action.set_summary("No apps found: winget may be missing, or its output could not be read.",
+                                     T.FAIL)
+            return
+        with_id = [a for a in installed if _scriptable(a["id"])]
+        no_id = [a for a in installed if not _scriptable(a["id"])]
+        approved = [a for a in with_id if a["id"].lower() in approved_ids]
+        unknown = [a for a in with_id if a["id"].lower() not in approved_ids]
+        key = lambda a: a["name"].lower()
+        self._results = {"approved": sorted(approved, key=key), "unknown": sorted(unknown, key=key),
+                         "no_id": sorted(no_id, key=key)}
+
+        self._tiles["Installed"].set(len(installed), T.TEXT_BRIGHT, f"{len(with_id)} with a winget ID")
+        self._tiles["Not approved"].set(len(unknown), T.WARN if unknown else T.MUTED, "outside common / team lists")
+        self._tiles["Approved"].set(len(approved), T.OK if approved else T.MUTED, "in common / team lists")
+        self._tiles["No winget ID"].set(len(no_id), T.DIM, "cannot be scripted")
+
+        r = 0
+        r = self._section(r, f"NOT IN APPROVED LISTS  ({len(unknown)})", T.WARN)
+        for a in self._results["unknown"]:
+            r = self._app_row(r, a, "UNKNOWN", T.WARN)
+        r = self._section(r, f"APPROVED  ({len(approved)})", T.OK)
+        for a in self._results["approved"]:
+            r = self._app_row(r, a, "APPROVED", T.OK)
+        if no_id:
+            r = self._section(r, f"NO WINGET ID · CANNOT SCRIPT  ({len(no_id)})", T.DIM)
+            for a in self._results["no_id"]:
+                r = self._app_row(r, a, "", T.DIM, checkable=False)
+
+        self._set_buttons(True)
+        self._update_summary()
+        log(f"Software audit: {len(installed)} installed, {len(unknown)} not approved")
+
+    def _section(self, r, text, color):
+        hdr = ctk.CTkFrame(self._rows, fg_color=T.PANEL_2, corner_radius=0, height=26)
+        hdr.grid(row=r, column=0, columnspan=4, sticky="ew", pady=(6 if r else 0, 0))
+        hdr.grid_propagate(False)
+        hdr.grid_rowconfigure(0, weight=1)
+        ctk.CTkLabel(hdr, text=text, font=T.mono(9, "bold"), text_color=color, anchor="w").grid(
+            row=0, column=0, padx=10, sticky="w")
+        return r + 1
+
+    def _app_row(self, r, app, badge, color, checkable=True):
+        row = ctk.CTkFrame(self._rows, fg_color=T.PANEL if r % 2 else T.PANEL_2, corner_radius=0, height=28)
+        row.grid(row=r, column=0, columnspan=4, sticky="ew")
+        row.grid_propagate(False)
+        row.grid_rowconfigure(0, weight=1)
+        row.grid_columnconfigure(1, weight=1)
+        if checkable:
+            var = ctk.BooleanVar(value=True)
+            var.trace_add("write", lambda *_: self._update_summary())
+            self._checks[app["id"]] = (var, app)
+            ctk.CTkCheckBox(row, text="", variable=var, width=20, checkbox_width=16,
+                            checkbox_height=16).grid(row=0, column=0, padx=(10, 6))
+        else:
+            ctk.CTkLabel(row, text="", width=26).grid(row=0, column=0, padx=(10, 6))
+        ctk.CTkLabel(row, text=app["name"], font=T.ui(12), text_color=T.TEXT_BRIGHT if checkable else T.MUTED,
+                     anchor="w").grid(row=0, column=1, sticky="w")
+        ctk.CTkLabel(row, text=app["id"] if len(app["id"]) <= 44 else app["id"][:43] + "…",
+                     font=T.mono(10), text_color=T.MUTED, anchor="w", width=300).grid(row=0, column=2, sticky="w")
+        ctk.CTkLabel(row, text=badge, font=T.mono(9, "bold"), text_color=color, width=70, anchor="w").grid(
+            row=0, column=3, padx=(0, 10))
+        return r + 1
+
+    # ── Selection ────────────────────────────────────────────────────
+
+    def _checked(self):
+        return sorted((app for var, app in self._checks.values() if var.get()), key=lambda a: a["name"].lower())
+
+    def _set_all(self, value):
+        for var, _ in self._checks.values():
+            var.set(value)
+
+    def _set_buttons(self, enabled):
+        for b in (self._export_btn, self._copy_btn, self._save_btn, self._install_btn):
+            b.configure(state="normal" if enabled else "disabled")
+
+    def _update_summary(self):
+        n = len(self._checked())
+        self._action.set_summary(f"{n} of {len(self._checks)} scriptable apps ticked" if self._checks
+                                 else "Nothing scriptable found")
+        for b in (self._copy_btn, self._save_btn, self._install_btn):
+            b.configure(state="normal" if n else "disabled")
+
+    # ── Outputs ──────────────────────────────────────────────────────
+
+    def _script(self):
+        apps = self._checked()
         lines = [
-            "# Software Reinstall Script",
-            f"# Generated by IT Provisioning Tool  —  {datetime.date.today()}",
-            f"# {len(checked)} app(s) selected",
+            "# Software reinstall script",
+            f"# Generated by IT Provisioning Tool on {os.environ.get('COMPUTERNAME', 'this PC')}, "
+            f"{datetime.date.today()}",
+            f"# {len(apps)} app(s)",
             "",
         ]
-        for a in sorted(checked, key=lambda x: x["name"].lower()):
-            lines.append(
-                f'winget install --id "{a["id"]}" '
-                f"--accept-package-agreements --accept-source-agreements --silent"
-            )
-        return lines
+        lines += [f'winget install --id "{a["id"]}" --exact --accept-package-agreements '
+                  f'--accept-source-agreements --silent' for a in apps]
+        return "\n".join(lines) + "\n"
 
-    def _audit_copy_clipboard(self):
-        script = "\n".join(self._audit_script_lines())
+    def _copy_script(self):
         self.clipboard_clear()
-        self.clipboard_append(script)
-        self._audit_copy_btn.configure(text="Copied!")
-        self.after(2000, lambda: self._audit_copy_btn.configure(text="Copy Script"))
-        self._append_output("Reinstall script copied to clipboard.")
+        self.clipboard_append(self._script())
+        self._copy_btn.configure(text="Copied ✓")
+        self.after(2000, lambda: self.winfo_exists() and self._copy_btn.configure(text="Copy script"))
+        self.tab._append_output(f"Reinstall script ({len(self._checked())} apps) copied to clipboard.")
 
-    def _audit_save_script(self):
-        import tkinter.filedialog as filedialog
+    def _save_script(self):
         path = filedialog.asksaveasfilename(
-            defaultextension=".ps1",
-            filetypes=[("PowerShell scripts", "*.ps1"), ("All files", "*.*")],
-            initialfile="reinstall_apps.ps1",
-            title="Save Reinstall Script",
-        )
+            parent=self, defaultextension=".ps1", initialfile="reinstall_apps.ps1",
+            filetypes=[("PowerShell scripts", "*.ps1"), ("All files", "*.*")], title="Save reinstall script")
         if not path:
             return
         try:
             with open(path, "w", encoding="utf-8") as f:
-                f.write("\n".join(self._audit_script_lines()))
+                f.write(self._script())
             log(f"Reinstall script saved to {path}", "success")
-            self._append_output(f"Script saved to {path}")
-        except Exception as e:
-            msgbox.showerror("Save Failed", str(e))
+            self.tab._append_output(f"Reinstall script saved to {path}")
+            self._action.set_summary(f"Saved {os.path.basename(path)}", T.OK)
+        except OSError as e:
+            msgbox.showerror("Save failed", str(e), parent=self)
 
-    def _audit_export_csv(self):
-        import csv
-        import tkinter.filedialog as filedialog
+    def _export_csv(self):
         path = filedialog.asksaveasfilename(
-            defaultextension=".csv",
-            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
-            initialfile="software_audit.csv",
-            title="Export Software Audit to CSV",
-        )
+            parent=self, defaultextension=".csv", initialfile="software_audit.csv",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")], title="Export software audit")
         if not path:
             return
         try:
             with open(path, "w", newline="", encoding="utf-8-sig") as f:
-                writer = csv.writer(f)
-                writer.writerow(["App Name", "Winget ID", "Status"])
-                for a in sorted(self._audit_results.get("unknown", []), key=lambda x: x["name"].lower()):
-                    writer.writerow([a["name"], a["id"], "Unknown"])
-                for a in sorted(self._audit_results.get("approved", []), key=lambda x: x["name"].lower()):
-                    writer.writerow([a["name"], a["id"], "Approved"])
-            log(f"Audit exported to {path}", "success")
-            self._append_output(f"Audit exported to {path}")
-        except Exception as e:
-            msgbox.showerror("Export Failed", str(e))
+                w = csv.writer(f)
+                w.writerow(["App Name", "Winget ID", "Status"])
+                for status, key in (("Not approved", "unknown"), ("Approved", "approved"), ("No winget ID", "no_id")):
+                    for a in self._results.get(key, []):
+                        w.writerow([a["name"], a["id"], status])
+            log(f"Software audit exported to {path}", "success")
+            self.tab._append_output(f"Software audit exported to {path}")
+            self._action.set_summary(f"Exported {os.path.basename(path)}", T.OK)
+        except OSError as e:
+            msgbox.showerror("Export failed", str(e), parent=self)
 
-    def _audit_install_unknown(self):
-        checked = [app for wid, (var, app) in self._audit_checkboxes.items() if var.get()]
-        if not checked or self._running:
+    def _install_selected(self):
+        apps = self._checked()
+        if not apps:
             return
-        apps = [{"name": a["name"], "winget_id": a["id"]} for a in checked]
-        self._audit_install_btn.configure(state="disabled")
-        self._run_installs(apps, self.common_bar, self.common_status)
-
-    def _run_audit(self):
-        self._audit_btn.configure(state="disabled", text="Scanning...")
-        self._audit_status.configure(text="Running winget list — this may take a moment...", text_color="gray")
-        for w in self._audit_scroll.winfo_children():
-            w.destroy()
-        self._audit_checkboxes.clear()
-        for btn in (self._audit_copy_btn, self._audit_save_btn,
-                    self._audit_export_btn, self._audit_install_btn):
-            btn.configure(state="disabled")
-
-        approved_ids = set()
-        for app in self.common_data.get("common_apps", []):
-            if app.get("winget_id"):
-                approved_ids.add(app["winget_id"].lower())
-        for apps_list in self.teams_data.get("teams", {}).values():
-            for app in apps_list:
-                if app.get("winget_id"):
-                    approved_ids.add(app["winget_id"].lower())
-
-        def task():
-            rc, out = run_inline_powershell("winget list --accept-source-agreements 2>&1")
-            installed = _parse_winget_list(out)
-
-            def done():
-                self._audit_btn.configure(state="normal", text="Scan Installed Apps")
-                if not installed:
-                    self._audit_status.configure(
-                        text="No apps found — winget may not be available or output could not be parsed.",
-                        text_color="#E57373")
-                    return
-
-                with_id    = [a for a in installed if "." in a["id"]]
-                without_id = [a for a in installed if "." not in a["id"]]
-                approved   = [a for a in with_id if a["id"].lower() in approved_ids]
-                unknown    = [a for a in with_id if a["id"].lower() not in approved_ids]
-                self._audit_results = {"approved": approved, "unknown": unknown, "all": with_id}
-
-                self._audit_status.configure(
-                    text=f"{len(installed)} apps found  •  {len(with_id)} have winget IDs  •  {len(without_id)} no ID (cannot script)",
-                    text_color="gray")
-
-                row_idx = 0
-                small = ctk.CTkFont(size=11)
-
-                def _section(label, color):
-                    nonlocal row_idx
-                    ctk.CTkLabel(self._audit_scroll, text=label, text_color=color,
-                                 font=ctk.CTkFont(size=12, weight="bold")).grid(
-                        row=row_idx, column=0, columnspan=3, sticky="w", padx=6, pady=(8, 2))
-                    row_idx += 1
-
-                def _app_row(app, badge, badge_color):
-                    nonlocal row_idx
-                    var = ctk.BooleanVar(value=True)
-                    self._audit_checkboxes[app["id"]] = (var, app)
-                    ctk.CTkCheckBox(self._audit_scroll, text="", variable=var, width=28,
-                                    checkbox_width=18, checkbox_height=18).grid(
-                        row=row_idx, column=0, padx=(4, 0), pady=1, sticky="w")
-                    ctk.CTkLabel(self._audit_scroll, text=app["name"], anchor="w",
-                                 font=small).grid(row=row_idx, column=1, sticky="w", padx=4, pady=1)
-                    ctk.CTkLabel(self._audit_scroll, text=app["id"], anchor="w",
-                                 text_color="gray", font=small).grid(
-                        row=row_idx, column=2, sticky="w", padx=4, pady=1)
-                    row_idx += 1
-
-                _section(f"⚠  Unknown / Not in approved list  ({len(unknown)})", "#FFB74D")
-                for a in sorted(unknown, key=lambda x: x["name"].lower()):
-                    _app_row(a, "UNKNOWN", "#FFB74D")
-
-                _section(f"✓  Approved  ({len(approved)})", "#81C784")
-                for a in sorted(approved, key=lambda x: x["name"].lower()):
-                    _app_row(a, "APPROVED", "#81C784")
-
-                if without_id:
-                    _section(f"—  No Winget ID (cannot script)  ({len(without_id)})", "gray")
-                    for a in sorted(without_id, key=lambda x: x["name"].lower()):
-                        ctk.CTkLabel(self._audit_scroll, text=f"   {a['name']}",
-                                     anchor="w", font=small, text_color="gray").grid(
-                            row=row_idx, column=0, columnspan=3, sticky="w", padx=6, pady=1)
-                        row_idx += 1
-
-                for btn in (self._audit_copy_btn, self._audit_save_btn,
-                            self._audit_export_btn, self._audit_install_btn):
-                    btn.configure(state="normal")
-                log(f"Software audit: {len(installed)} installed, {len(unknown)} unknown")
-
-            self.after(0, done)
-
-        threading.Thread(target=task, daemon=True).start()
+        if self.tab._running:
+            self._action.set_summary("Wait for the current install on the Apps page to finish.", T.WARN)
+            return
+        if not confirm_run(self, "Install apps?", f"These {len(apps)} app(s) will be installed with winget:",
+                           [f"{a['name']}  ({a['id']})" for a in apps], action_text=f"Install {len(apps)}"):
+            return
+        self.destroy()
+        self.tab._run_installs([{"name": a["name"], "winget_id": a["id"]} for a in apps])

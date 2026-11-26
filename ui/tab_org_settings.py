@@ -1,4 +1,6 @@
 import customtkinter as ctk
+
+from ui import theme as T
 import json
 import os
 import threading
@@ -34,7 +36,7 @@ class OrgSettingsTab(ctk.CTkFrame):
                       font=ctk.CTkFont(size=16, weight="bold")).grid(
             row=0, column=0, sticky="w", padx=20, pady=(16, 4))
         ctk.CTkLabel(apply_card, text="Apply organisation-standard Windows configuration.",
-                      text_color="gray", font=ctk.CTkFont(size=12)).grid(
+                      text_color=T.MUTED, font=ctk.CTkFont(size=12)).grid(
             row=1, column=0, sticky="w", padx=20, pady=(0, 10))
 
         apply_scroll = ctk.CTkScrollableFrame(apply_card, height=200)
@@ -49,7 +51,7 @@ class OrgSettingsTab(ctk.CTkFrame):
             row_frame.grid_columnconfigure(1, weight=1)
             ctk.CTkCheckBox(row_frame, text=tweak["name"], variable=var, width=220).grid(
                 row=0, column=0, sticky="w")
-            ctk.CTkLabel(row_frame, text=tweak["description"], text_color="gray",
+            ctk.CTkLabel(row_frame, text=tweak["description"], text_color=T.MUTED,
                           font=ctk.CTkFont(size=11), wraplength=300).grid(
                 row=0, column=1, sticky="w", padx=12)
             self.apply_checkboxes[i] = (var, tweak)
@@ -60,10 +62,10 @@ class OrgSettingsTab(ctk.CTkFrame):
         self.apply_btn = ctk.CTkButton(apply_btn_row, text="Apply Selected Settings",
                                         command=self._apply)
         self.apply_btn.grid(row=0, column=0, padx=(0, 8))
-        ctk.CTkButton(apply_btn_row, text="Select All", width=90,
+        ctk.CTkButton(apply_btn_row, text="Select All", fg_color="transparent", border_width=1, width=90,
                        command=lambda: [v.set(True) for v, _ in self.apply_checkboxes.values()]).grid(
             row=0, column=1, padx=4)
-        ctk.CTkButton(apply_btn_row, text="Deselect All", width=90,
+        ctk.CTkButton(apply_btn_row, text="Deselect All", fg_color="transparent", border_width=1, width=90,
                        command=lambda: [v.set(False) for v, _ in self.apply_checkboxes.values()]).grid(
             row=0, column=2, padx=4)
 
@@ -85,7 +87,7 @@ class OrgSettingsTab(ctk.CTkFrame):
                       font=ctk.CTkFont(size=14, weight="bold")).grid(
             row=0, column=0, sticky="w", padx=20, pady=(14, 4))
         ctk.CTkLabel(rollback_card, text="Restore selected settings to Windows defaults.",
-                      text_color="gray", font=ctk.CTkFont(size=12)).grid(
+                      text_color=T.MUTED, font=ctk.CTkFont(size=12)).grid(
             row=1, column=0, sticky="w", padx=20, pady=(0, 8))
 
         rb_scroll = ctk.CTkScrollableFrame(rollback_card, height=160)
@@ -105,10 +107,10 @@ class OrgSettingsTab(ctk.CTkFrame):
                                            fg_color="#FF8F00", hover_color="#E65100",
                                            command=self._rollback)
         self.rollback_btn.grid(row=0, column=0, padx=(0, 8))
-        ctk.CTkButton(rb_btn_row, text="Select All", width=90,
+        ctk.CTkButton(rb_btn_row, text="Select All", fg_color="transparent", border_width=1, width=90,
                        command=lambda: [v.set(True) for v, _ in self.rollback_checkboxes.values()]).grid(
             row=0, column=1, padx=4)
-        ctk.CTkButton(rb_btn_row, text="Deselect All", width=90,
+        ctk.CTkButton(rb_btn_row, text="Deselect All", fg_color="transparent", border_width=1, width=90,
                        command=lambda: [v.set(False) for v, _ in self.rollback_checkboxes.values()]).grid(
             row=0, column=2, padx=4)
 

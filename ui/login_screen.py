@@ -1,4 +1,6 @@
 import customtkinter as ctk
+
+from ui import theme as T
 from modules.auth import authenticate
 
 
@@ -17,7 +19,7 @@ class LoginScreen(ctk.CTkFrame):
             row=0, column=0, pady=(60, 4))
         ctk.CTkLabel(self, text="Sign in to continue",
                       font=ctk.CTkFont(size=14),
-                      text_color="gray").grid(row=1, column=0, pady=(0, 40))
+                      text_color=T.MUTED).grid(row=1, column=0, pady=(0, 40))
 
         # Login card
         card = ctk.CTkFrame(self, width=380, corner_radius=16)
@@ -39,7 +41,7 @@ class LoginScreen(ctk.CTkFrame):
                                             show="*")
         self.password_entry.grid(row=3, column=0, padx=30, pady=(0, 8))
 
-        self.error_label = ctk.CTkLabel(card, text="", text_color="#FF5555",
+        self.error_label = ctk.CTkLabel(card, text="", text_color=T.FAIL,
                                          font=ctk.CTkFont(size=12))
         self.error_label.grid(row=4, column=0, pady=(0, 4))
 

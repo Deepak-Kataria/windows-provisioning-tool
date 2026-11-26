@@ -1,0 +1,383 @@
+"""Shared UI helpers: tooltips, stat tiles, section headers, confirm-before-run dialog,
+tab keyboard shortcuts."""
+import tkinter as tk
+
+import customtkinter as ctk
+
+from ui import theme as T
+
+# ── Stat tile / section header ──────────────────────────────────────
+
+
+class StatTile(ctk.CTkFrame):
+    """Dashboard tile: coloured left bar, small caps label, big mono value, optional subline."""
+
+    def __init__(self, master, label, value="-", color=None, sub=""):
+        super().__init__(master, fg_color=T.PANEL, corner_radius=4,
+                         border_width=1, border_color=T.BORDER)
+        self.grid_columnconfigure(1, weight=1)
+        self._bar = ctk.CTkFrame(self, width=3, height=1, corner_radius=0)
+        self._bar.grid(row=0, column=0, rowspan=3, sticky="ns", padx=(1, 0), pady=1)
+        ctk.CTkLabel(self, text=label.upper(), font=T.mono(10), text_color=T.MUTED,
+                     anchor="w", height=14).grid(row=0, column=1, padx=12, pady=(10, 0), sticky="w")
+        self._value = ctk.CTkLabel(self, text="", font=T.mono(24, "bold"), anchor="w", height=32)
+        self._value.grid(row=1, column=1, padx=12, sticky="w")
+        self._sub = ctk.CTkLabel(self, text="", font=ctk.CTkFont(size=11), text_color=T.MUTED,
+                                 anchor="w", justify="left", height=16, wraplength=220)
+        self._sub.grid(row=2, column=1, padx=12, pady=(0, 10), sticky="w")
+        self.set(value, color, sub)
+
+    def set(self, value, color=None, sub=""):
+        color = color or T.TEXT_BRIGHT
+        text = str(value)
+        self._bar.configure(fg_color=color)
+        # long values (models, plan names) step down so they fit narrow tiles
+        size = 24 if len(text) <= 9 else 20 if len(text) <= 12 else 17
+        self._value.configure(text=text, text_color=color, font=T.mono(size, "bold"))
+        self._sub.configure(text=sub or " ")
+
+
+def tile_row(master, tiles):
+    """Lay out [(label, value, color, sub), ...] as equal-width tiles; returns {label: tile}."""
+    row = ctk.CTkFrame(master, fg_color="transparent")
+    out = {}
+    for i, (label, value, color, sub) in enumerate(tiles):
+        row.grid_columnconfigure(i, weight=1, uniform="tile")
+        t = StatTile(row, label, value, color, sub)
+        t.grid(row=0, column=i, padx=(0 if i == 0 else 4, 0 if i == len(tiles) - 1 else 4),
+               sticky="nsew")
+        out[label] = t
+    return row, out
+
+
+def meta_line(master, pairs):
+    """Mono 'KEY value   KEY value' strip for host / scan metadata."""
+    f = ctk.CTkFrame(master, fg_color="transparent")
+    for i, (k, v) in enumerate(pairs):
+        ctk.CTkLabel(f, text=k.upper(), font=T.mono(10), text_color=T.DIM).grid(
+            row=0, column=2 * i, padx=(0 if i == 0 else 18, 6))
+        ctk.CTkLabel(f, text=str(v), font=T.mono(11), text_color=T.TEXT).grid(
+            row=0, column=2 * i + 1)
+    return f
+
+
+def section_header(master, title, height=34, accent=None, big=False):
+    """Group header bar with an accent stripe. Returns (frame, next_free_column);
+    that column stretches, so callers put a count there and buttons further right."""
+    hdr = ctk.CTkFrame(master, fg_color=T.PANEL_2, corner_radius=0, height=height)
+    hdr.grid_propagate(False)
+    hdr.grid_rowconfigure(0, weight=1)
+    hdr.grid_columnconfigure(2, weight=1)
+    ctk.CTkFrame(hdr, width=3, height=1, corner_radius=0, fg_color=accent or T.ACCENT).grid(
+        row=0, column=0, sticky="ns")
+    ctk.CTkLabel(hdr, text=title.upper(), font=T.mono(13 if big else 12, "bold"),
+                 text_color=T.TEXT_BRIGHT, anchor="w").grid(row=0, column=1, padx=(10, 12), sticky="w")
+    return hdr, 2
+
+
+class ActionBar(ctk.CTkFrame):
+    """Bottom bar of a page: summary text on the left, buttons on the right, optional progress.
+
+    bar = ActionBar(parent); bar.button("Select all", cmd, outline=True); main = bar.button(...)
+    bar.set_summary("26 apps selected"); bar.progress(0.4, "Removing 10 / 26")
+    """
+
+    def __init__(self, master):
+        super().__init__(master, fg_color=T.PANEL, corner_radius=0, border_width=0)
+        self.grid_columnconfigure(0, weight=1)
+        ctk.CTkFrame(self, height=2, corner_radius=0, fg_color=T.ACCENT).grid(
+            row=0, column=0, columnspan=20, sticky="ew")
+        self._summary = ctk.CTkLabel(self, text="", font=T.mono(11), text_color=T.MUTED, anchor="w")
+        self._summary.grid(row=1, column=0, sticky="w", padx=12, pady=8)
+        self._col = 1
+        self._bar = ctk.CTkProgressBar(self, height=4, corner_radius=0)
+        self._bar.set(0)
+        self._bar_shown = False
+
+    def button(self, text, command, outline=False, danger=False, width=None, tip_text=None, **kw):
+        if danger:
+            kw.update(fg_color=T.DANGER, hover_color=T.DANGER_HOVER)
+        if width:
+            kw["width"] = width
+        btn = (T.outline_button if outline else ctk.CTkButton)(self, text=text, command=command,
+                                                                height=30, **kw)
+        btn.grid(row=1, column=self._col, padx=(0, 10 if self._col else 0), pady=8)
+        self._col += 1
+        if tip_text:
+            tip(btn, tip_text)
+        return btn
+
+    def set_summary(self, text, color=None):
+        self._summary.configure(text=text, text_color=color or T.MUTED)
+
+    def progress(self, frac=None, text=None):
+        """Show the progress line (frac 0..1); progress(None) hides it."""
+        if frac is None:
+            if self._bar_shown:
+                self._bar.grid_remove()
+                self._bar_shown = False
+        else:
+            if not self._bar_shown:
+                self._bar.grid(row=2, column=0, columnspan=20, sticky="ew")
+                self._bar_shown = True
+            self._bar.set(max(0.0, min(1.0, frac)))
+        if text is not None:
+            self.set_summary(text, T.TEXT)
+
+
+class LogDrawer(ctk.CTkFrame):
+    """Collapsible output log. Collapsed it shows only the last line."""
+
+    def __init__(self, master, expanded=False, height=150):
+        super().__init__(master, fg_color="#05090d", corner_radius=0, border_width=1,
+                         border_color=T.BORDER)
+        self.grid_columnconfigure(0, weight=1)
+        head = ctk.CTkFrame(self, fg_color="transparent", height=24, cursor="hand2")
+        head.grid(row=0, column=0, sticky="ew", padx=10)
+        head.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(head, text="OUTPUT", font=T.mono(9, "bold"), text_color=T.DIM).grid(
+            row=0, column=0, sticky="w")
+        self._last = ctk.CTkLabel(head, text="", font=T.mono(10), text_color=T.TERM_TEXT, anchor="w")
+        self._last.grid(row=0, column=1, sticky="ew", padx=12)
+        self._toggle_lbl = ctk.CTkLabel(head, text="", font=T.mono(9), text_color=T.DIM)
+        self._toggle_lbl.grid(row=0, column=2, sticky="e")
+        for w in (head, self._toggle_lbl):
+            w.bind("<Button-1>", lambda e: self.toggle())
+        tip(self._toggle_lbl, "Show or hide the full output")
+        self._box = ctk.CTkTextbox(self, height=height, state="disabled", font=T.mono(11),
+                                   fg_color="transparent", border_width=0)
+        self._expanded = not expanded
+        self.toggle()
+
+    def toggle(self):
+        self._expanded = not self._expanded
+        if self._expanded:
+            self._box.grid(row=1, column=0, sticky="nsew", padx=4, pady=(0, 4))
+            self._last.grid_remove()
+        else:
+            self._box.grid_remove()
+            self._last.grid()
+        self._toggle_lbl.configure(text="▾ hide" if self._expanded else "▴ show all")
+
+    def append(self, text):
+        self._box.configure(state="normal")
+        self._box.insert("end", text + "\n")
+        self._box.see("end")
+        self._box.configure(state="disabled")
+        last = text.strip().splitlines()[-1] if text.strip() else ""
+        self._last.configure(text=last[:160])
+
+    def clear(self):
+        self._box.configure(state="normal")
+        self._box.delete("1.0", "end")
+        self._box.configure(state="disabled")
+        self._last.configure(text="")
+
+
+def status_cell(master, status):
+    """Fixed-width mono status tag, e.g. FAIL in red."""
+    return ctk.CTkLabel(master, text=T.STATUS_TAG.get(status, " ?? "), width=44,
+                        font=T.mono(11, "bold"), text_color=T.STATUS.get(status, T.MUTED))
+
+
+# ── Tooltip ─────────────────────────────────────────────────────────
+
+_TIP_DELAY_MS = 500
+
+
+class Tooltip:
+    """Hover tooltip for any Tk/CTk widget. CTk widgets forward bind() to their inner parts."""
+
+    def __init__(self, widget, text, wraplength=320):
+        self.widget = widget
+        self.text = text
+        self.wraplength = wraplength
+        self._after_id = None
+        self._tip = None
+        self._bind(widget)
+
+    def _bind(self, w):
+        try:
+            w.bind("<Enter>", self._schedule, add="+")
+            w.bind("<Leave>", self._hide, add="+")
+            w.bind("<ButtonPress>", self._hide, add="+")
+        except NotImplementedError:
+            # e.g. CTkSegmentedButton refuses bind(); attach to its inner buttons instead
+            for child in w.winfo_children():
+                self._bind(child)
+
+    def _schedule(self, _event=None):
+        self._cancel()
+        self._after_id = self.widget.after(_TIP_DELAY_MS, self._show)
+
+    def _cancel(self):
+        if self._after_id:
+            try:
+                self.widget.after_cancel(self._after_id)
+            except Exception:
+                pass
+            self._after_id = None
+
+    def _show(self):
+        self._after_id = None
+        if self._tip or not self.text or not self.widget.winfo_exists():
+            return
+        x = self.widget.winfo_rootx() + 12
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 4
+        self._tip = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        tw.wm_attributes("-topmost", True)
+        tw.configure(bg=T.ACCENT_DIM)   # 1px border colour
+        tk.Label(tw, text=self.text, justify="left", wraplength=self.wraplength,
+                 bg=T.PANEL_2, fg=T.TEXT, borderwidth=0,
+                 font=(T.UI_FAMILY, 9), padx=8, pady=4).pack(padx=1, pady=1)
+        tw.wm_geometry(f"+{x}+{y}")
+
+    def _hide(self, _event=None):
+        self._cancel()
+        if self._tip:
+            self._tip.destroy()
+            self._tip = None
+
+
+def tip(widget, text):
+    """Attach a tooltip and return the widget, so it can wrap a constructor call."""
+    Tooltip(widget, text)
+    return widget
+
+
+# ── Confirm before run ──────────────────────────────────────────────
+
+def confirm_run(parent, title, intro, items, action_text="Run", danger=False, footer=None):
+    """Modal "here's what will run" dialog. Returns True if the user confirms.
+
+    items: list of str, or (str, highlighted) tuples — highlighted items are shown in red.
+    """
+    norm = [(i, False) if isinstance(i, str) else (i[0], bool(i[1])) for i in items]
+    result = {"ok": False}
+
+    dlg = ctk.CTkToplevel(parent)
+    dlg.title(title)
+    height = min(220 + 26 * len(norm), 560)
+    dlg.geometry(f"520x{height}")
+    dlg.minsize(420, 240)
+    dlg.resizable(True, True)
+    dlg.transient(parent.winfo_toplevel())
+    dlg.grid_columnconfigure(0, weight=1)
+    dlg.grid_rowconfigure(2, weight=1)
+
+    ctk.CTkLabel(dlg, text=("⚠  " if danger else "▸  ") + title.upper(), font=T.mono(13, "bold"),
+                 text_color=T.WARN if danger else T.ACCENT, anchor="w").grid(
+        row=0, column=0, padx=16, pady=(14, 2), sticky="w")
+    ctk.CTkLabel(dlg, text=intro, font=ctk.CTkFont(size=12), text_color=T.MUTED,
+                 wraplength=480, justify="left", anchor="w").grid(
+        row=1, column=0, padx=16, pady=(0, 6), sticky="w")
+
+    box = ctk.CTkScrollableFrame(dlg)
+    box.grid(row=2, column=0, padx=16, pady=4, sticky="nsew")
+    box.grid_columnconfigure(0, weight=1)
+    for i, (text, hot) in enumerate(norm):
+        ctk.CTkLabel(box, text=f"›  {text}", anchor="w", justify="left", wraplength=440,
+                     font=T.mono(12), text_color=T.FAIL if hot else T.TEXT).grid(
+            row=i, column=0, padx=6, pady=1, sticky="w")
+
+    row = 3
+    if footer:
+        ctk.CTkLabel(dlg, text=footer, font=ctk.CTkFont(size=11, slant="italic"),
+                     text_color=T.FAIL if danger else T.MUTED,
+                     wraplength=480, justify="left", anchor="w").grid(
+            row=row, column=0, padx=16, pady=(6, 0), sticky="w")
+        row += 1
+
+    def close(ok):
+        result["ok"] = ok
+        try:
+            dlg.grab_release()
+        except Exception:
+            pass
+        dlg.destroy()
+
+    btns = ctk.CTkFrame(dlg, fg_color="transparent")
+    btns.grid(row=row, column=0, padx=16, pady=(10, 14), sticky="e")
+    ctk.CTkButton(btns, text="Cancel", width=100, fg_color="transparent", border_width=1,
+                  command=lambda: close(False)).grid(row=0, column=0, padx=(0, 8))
+    kw = {"fg_color": T.DANGER, "hover_color": T.DANGER_HOVER} if danger else {}
+    ctk.CTkButton(btns, text=action_text, width=150, command=lambda: close(True), **kw).grid(
+        row=0, column=1)
+
+    dlg.bind("<Return>", lambda e: close(True))
+    dlg.bind("<KP_Enter>", lambda e: close(True))
+    dlg.bind("<Escape>", lambda e: close(False))
+    dlg.protocol("WM_DELETE_WINDOW", lambda: close(False))
+    dlg.lift()
+    dlg.after(50, dlg.focus_force)
+    dlg.after(60, lambda: dlg.winfo_exists() and dlg.grab_set())
+    parent.wait_window(dlg)
+    return result["ok"]
+
+
+# ── Keyboard shortcuts ──────────────────────────────────────────────
+# Tabs opt in by defining any of:
+#   shortcut_select_all()    Ctrl+A
+#   shortcut_deselect_all()  Ctrl+Shift+A
+#   shortcut_apply()         Ctrl+Enter   (main action of the tab: apply / clean / scan)
+# A tab that hosts sub-sections can define shortcut_target() returning the active one.
+
+SHORTCUTS = {
+    "<Control-a>": "shortcut_select_all",
+    "<Control-A>": "shortcut_deselect_all",   # Shift makes the keysym uppercase
+    "<Control-Return>": "shortcut_apply",
+    "<Control-KP_Enter>": "shortcut_apply",
+}
+
+_TEXT_CLASSES = {"Entry", "Text", "TEntry", "Spinbox", "TCombobox"}
+
+
+def _resolve(target):
+    seen = 0
+    while target is not None and hasattr(target, "shortcut_target") and seen < 5:
+        nxt = target.shortcut_target()
+        if nxt is None or nxt is target:
+            break
+        target, seen = nxt, seen + 1
+    return target
+
+
+def bind_root(owner, bindings):
+    """Bind {sequence: handler} on owner's toplevel window; unbound when owner is destroyed
+    (e.g. on logout), so a rebuilt dashboard doesn't stack duplicate handlers."""
+    root = owner.winfo_toplevel()
+    bound = [(seq, root.bind(seq, fn, add="+")) for seq, fn in bindings.items()]
+
+    def cleanup(event):
+        if event.widget is not owner:
+            return
+        for seq, funcid in bound:
+            try:
+                root.unbind(seq, funcid)
+            except Exception:
+                pass
+        bound.clear()
+
+    # tk.Misc.bind directly: CTk widgets redirect .bind() to their inner canvas,
+    # whose <Destroy> event would never have owner as event.widget.
+    tk.Misc.bind(owner, "<Destroy>", cleanup, "+")
+
+
+def install_shortcuts(owner, get_active):
+    """Bind tab shortcuts on owner's toplevel; get_active() returns the visible tab widget."""
+
+    def make_handler(method):
+        def handler(event):
+            # In text fields, let Ctrl+A select text as usual.
+            if event.widget.winfo_class() in _TEXT_CLASSES:
+                return None
+            target = _resolve(get_active())
+            fn = getattr(target, method, None) if target is not None else None
+            if callable(fn):
+                fn()
+                return "break"
+            return None
+        return handler
+
+    bind_root(owner, {seq: make_handler(method) for seq, method in SHORTCUTS.items()})
