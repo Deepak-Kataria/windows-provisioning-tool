@@ -1,0 +1,18 @@
+{
+  "id": "security.scan",
+  "title": "Security scan",
+  "description": "Runs the security checks (firewall, RDP, SMBv1, Defender, BitLocker, ...). Read-only. Returns per-check status and a 0-100 score.",
+  "min_role": "technician",
+  "timeout_seconds": 900,
+  "params": {
+    "properties": {
+      "check_ids": {
+        "type": "array",
+        "items": {"type": "string", "pattern": "^[a-z0-9_]{1,40}$"},
+        "uniqueItems": true,
+        "maxItems": 100
+      }
+    }
+  },
+  "agent": {"type": "builtin", "name": "security_scan"}
+}

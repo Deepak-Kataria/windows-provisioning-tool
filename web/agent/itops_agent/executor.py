@@ -1,25 +1,28 @@
 """Runs allowlisted actions.
 
 The agent loads the same web/actions/*.json files as the server (from its signed bundle),
-validates params again, and maps them to a fixed script + named arguments. No shell is ever
-used and no string from the server is ever executed as code.
+validates params again, and maps them to fixed code: a bundled script with argv, or a builtin
+handler compiled into the agent. No shell is used and no string from the server is ever
+executed as code.
 
 "agent" block in an action file:
-  {"type": "builtin", "name": "ping"}
+  {"type": "builtin", "name": "ping"}         # see builtins.py
   {"type": "powershell",
    "script": "get_system_info.ps1",          # file in scripts/
    "args": {"NewName": "new_name"},          # -NewName <params.new_name>; bool -> switch
    "env": {"ITOPS_PASSWORD": "password"},    # secrets go via env, never the command line
    "output": "text" | "json" | "kv",         # json: stdout is the result; kv: KEY:value lines
    "stream": true}                           # send stdout lines live to the server
+
+Cancel and timeout both cancel the job task; any child process is killed (whole tree).
 """
 import asyncio
+import base64
 import contextlib
 import json
 import logging
 import os
 import platform
-import socket
 import subprocess
 import time
 from collections.abc import Awaitable, Callable
@@ -27,13 +30,16 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
-from . import VERSION
 from .bundle import Bundle, BundleError
 
 log = logging.getLogger(__name__)
 
 Send = Callable[[dict[str, Any]], Awaitable[None]]
 MAX_RESULT_BYTES = 4 * 1024 * 1024
+
+
+class ActionFailed(Exception):
+    """Raised by handlers for an expected failure with a clean message."""
 
 
 class ActionSpec:
@@ -76,22 +82,86 @@ class OutputSink:
     async def flush(self) -> None:
         if self.buf:
             batch, self.buf = self.buf, []
-            await self.send({"type": "job_output", "job_id": self.job_id, "lines": batch})
+            with contextlib.suppress(Exception):
+                await self.send({"type": "job_output", "job_id": self.job_id, "lines": batch})
         self.last = time.monotonic()
 
 
-class Cancelled(Exception):
-    pass
+class JobContext:
+    """What a handler gets: output sink, bundle access, and cancellable process helpers."""
+
+    def __init__(self, job_id: str, sink: OutputSink, bundle: Bundle) -> None:
+        self.job_id = job_id
+        self.sink = sink
+        self.bundle = bundle
+
+    async def run(
+        self,
+        cmd: list[str],
+        env: dict[str, str] | None = None,
+        stream: bool = True,
+        noise: Callable[[str], bool] | None = None,
+    ) -> tuple[int, list[str], list[str]]:
+        """Run a process (argv list, no shell). Returns (exit code, stdout lines, stderr lines)."""
+        kwargs: dict[str, Any] = {}
+        if os.name == "nt":
+            kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env,
+            limit=1024 * 1024,  # long progress lines without newlines
+            **kwargs,
+        )
+        out: list[str] = []
+        err: list[str] = []
+
+        async def pump(reader, name, store):
+            while True:
+                raw = await reader.readline()
+                if not raw:
+                    return
+                for line in _decode(raw).replace("\r", "\n").split("\n"):
+                    line = line.rstrip()
+                    if not line.strip() or (noise and noise(line)):
+                        continue
+                    store.append(line)
+                    if name == "stderr" or stream:
+                        await self.sink.line(line, name)
+
+        try:
+            await asyncio.gather(pump(proc.stdout, "stdout", out), pump(proc.stderr, "stderr", err))
+            await proc.wait()
+        except BaseException:  # cancelled or timed out: never leave the process behind
+            await _kill_tree(proc)
+            raise
+        return proc.returncode, out, err
+
+    async def powershell(self, code: str, stream: bool = False) -> tuple[int, str]:
+        """Run a PowerShell snippet that is part of the agent itself (never from the server)."""
+        prelude = "$ProgressPreference='SilentlyContinue';[Console]::OutputEncoding=[Text.Encoding]::UTF8;\n"
+        encoded = base64.b64encode((prelude + code).encode("utf-16-le")).decode("ascii")
+        rc, out, err = await self.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+             "-EncodedCommand", encoded],
+            stream=stream,
+            noise=lambda ln: ln.startswith("#< CLIXML") or "<Objs " in ln,
+        )
+        lines = out + [f"ERR: {ln}" for ln in err]
+        return rc, "\n".join(lines)
 
 
 class Executor:
     def __init__(self, bundle: Bundle, send: Send, actions_prefix: str) -> None:
+        from . import builtins  # late import: builtins import this module
+
         self.bundle = bundle
         self.send = send
+        self.builtins = builtins.REGISTRY
         self.actions = load_actions(bundle, actions_prefix)
         self.tasks: dict[str, asyncio.Task] = {}
-        self.procs: dict[str, asyncio.subprocess.Process] = {}
-        self.cancelled: set[str] = set()
         log.info("loaded %d actions: %s", len(self.actions), ", ".join(sorted(self.actions)))
 
     def running_ids(self) -> list[str]:
@@ -108,18 +178,16 @@ class Executor:
         task.add_done_callback(lambda _t: self.tasks.pop(job_id, None))
 
     async def cancel(self, job_id: str) -> None:
-        if job_id not in self.tasks:
-            return
-        self.cancelled.add(job_id)
-        proc = self.procs.get(job_id)
-        if proc is not None:
-            await _kill_tree(proc)
-        else:
-            self.tasks[job_id].cancel()
+        task = self.tasks.get(job_id)
+        if task is not None:
+            task.cancel()
 
     async def shutdown(self) -> None:
-        for job_id in list(self.tasks):
-            await self.cancel(job_id)
+        tasks = list(self.tasks.values())
+        for t in tasks:
+            t.cancel()
+        if tasks:
+            await asyncio.wait(tasks, timeout=15)
 
     # ------------------------------------------------------------ job lifecycle
 
@@ -151,27 +219,22 @@ class Executor:
             return
         timeout = min(int(msg.get("timeout_seconds") or spec.timeout), spec.timeout)
         sink = OutputSink(self.send, job_id)
+        ctx = JobContext(job_id, sink, self.bundle)
         try:
             await self.send({"type": "job_started", "job_id": job_id})
             self.bundle.check(spec.rel)  # action file unchanged since start
-            kind = spec.agent.get("type")
-            if kind == "builtin":
-                code, result = await asyncio.wait_for(self._builtin(spec, params, sink), timeout)
-            elif kind == "powershell":
-                code, result = await self._powershell(job_id, spec, params, sink, timeout)
-            else:
-                raise BundleError(f"unsupported action type {kind!r}")
+            code, result = await asyncio.wait_for(self._dispatch(ctx, spec, params), timeout)
             await sink.flush()
-            if job_id in self.cancelled:
-                await self._done(job_id, "cancelled", code, error="cancelled")
-            else:
-                await self._done(job_id, "succeeded" if code == 0 else "failed", code, result)
-        except (asyncio.CancelledError, Cancelled):
+            await self._done(job_id, "succeeded" if code == 0 else "failed", code, result)
+        except asyncio.CancelledError:
             await sink.flush()
             await self._done(job_id, "cancelled", error="cancelled")
         except TimeoutError:
             await sink.flush()
             await self._done(job_id, "failed", error=f"timed out after {timeout}s")
+        except ActionFailed as e:
+            await sink.flush()
+            await self._done(job_id, "failed", error=str(e))
         except BundleError as e:
             log.error("bundle check failed for %s: %s", action_id, e)
             await self._done(job_id, "failed", error=f"bundle check failed: {e}")
@@ -179,21 +242,19 @@ class Executor:
             log.exception("job %s crashed", job_id)
             await sink.flush()
             await self._done(job_id, "failed", error=f"{type(e).__name__}: {e}")
-        finally:
-            self.cancelled.discard(job_id)
-            self.procs.pop(job_id, None)
 
-    # ------------------------------------------------------------ builtins
+    async def _dispatch(self, ctx: JobContext, spec: ActionSpec, params: dict[str, Any]):
+        kind = spec.agent.get("type")
+        if kind == "builtin":
+            handler = self.builtins.get(spec.agent.get("name", ""))
+            if handler is None:
+                raise BundleError(f"unknown builtin {spec.agent.get('name')!r}")
+            return await handler(ctx, params, spec.agent)
+        if kind == "powershell":
+            return await self._powershell(ctx, spec, params)
+        raise BundleError(f"unsupported action type {kind!r}")
 
-    async def _builtin(self, spec: ActionSpec, params: dict[str, Any], sink: OutputSink):
-        name = spec.agent.get("name")
-        if name == "ping":
-            msg = params.get("message", "")
-            await sink.line(f"pong {msg}".strip())
-            return 0, {"echo": msg, "hostname": socket.gethostname(), "agent_version": VERSION}
-        raise BundleError(f"unknown builtin {name!r}")
-
-    # ------------------------------------------------------------ powershell
+    # ------------------------------------------------------------ powershell scripts
 
     def _build_command(self, spec: ActionSpec, params: dict[str, Any]) -> tuple[list[str], dict]:
         a = spec.agent
@@ -224,63 +285,26 @@ class Executor:
                 env[env_name] = str(params[key])
         return cmd, env
 
-    async def _powershell(self, job_id, spec, params, sink: OutputSink, timeout: int):
+    async def _powershell(self, ctx: JobContext, spec: ActionSpec, params: dict[str, Any]):
         cmd, env = self._build_command(spec, params)
         output = spec.agent.get("output", "text")
-        want_json = output == "json"
         stream = spec.agent.get("stream", output == "text")
-        kwargs: dict[str, Any] = {}
-        if os.name == "nt":
-            kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdin=asyncio.subprocess.DEVNULL,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-            **kwargs,
-        )
-        self.procs[job_id] = proc
-        stdout_lines: list[str] = []
-
-        async def pump(reader, name):
-            while True:
-                raw = await reader.readline()
-                if not raw:
-                    return
-                line = _decode(raw).rstrip("\r\n")
-                if name == "stdout":
-                    stdout_lines.append(line)
-                    if stream and line.strip():
-                        await sink.line(line, "stdout")
-                elif line.strip():
-                    await sink.line(line, "stderr")
-
-        try:
-            await asyncio.wait_for(
-                asyncio.gather(pump(proc.stdout, "stdout"), pump(proc.stderr, "stderr"), proc.wait()),
-                timeout,
-            )
-        except TimeoutError:
-            await _kill_tree(proc)
-            raise
-        if job_id in self.cancelled:
-            raise Cancelled()
+        rc, out, _err = await ctx.run(cmd, env=env, stream=stream)
         result = None
-        if want_json:
-            text = "\n".join(stdout_lines).strip()
+        if output == "json":
+            text = "\n".join(out).strip()
             try:
                 result = json.loads(text) if text else None
                 if result is not None and not isinstance(result, dict):
                     result = {"data": result}
             except json.JSONDecodeError:
-                await sink.line("script did not return valid JSON", "system")
-                for line in stdout_lines[-50:]:
-                    await sink.line(line, "stdout")
-                return (proc.returncode or 1), None
+                await ctx.sink.line("script did not return valid JSON", "system")
+                for line in out[-50:]:
+                    await ctx.sink.line(line, "stdout")
+                return (rc or 1), None
         elif output == "kv":
-            result = parse_kv(stdout_lines)
-        return proc.returncode, result
+            result = parse_kv(out)
+        return rc, result
 
 
 def parse_kv(lines: list[str]) -> dict[str, str]:
@@ -305,14 +329,17 @@ async def _kill_tree(proc: asyncio.subprocess.Process) -> None:
     if proc.returncode is not None:
         return
     if os.name == "nt":
-        killer = await asyncio.create_subprocess_exec(
-            "taskkill", "/T", "/F", "/PID", str(proc.pid),
-            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
-        )
-        await killer.wait()
+        with contextlib.suppress(Exception):
+            killer = await asyncio.create_subprocess_exec(
+                "taskkill", "/T", "/F", "/PID", str(proc.pid),
+                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+            )
+            await killer.wait()
     else:
         with contextlib.suppress(ProcessLookupError):
             proc.kill()
+    with contextlib.suppress(Exception):
+        await asyncio.wait_for(proc.wait(), 5)
 
 
 def os_info() -> dict[str, Any]:

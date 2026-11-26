@@ -5,7 +5,7 @@
       Prints the public key: paste it into web/agent/itops_agent/bundle_key.py.
 
   python web/tools/bundle_tool.py build --key C:\keys\itops-bundle.key --out web/agent/build/bundle
-      Copies web/actions/*.json and scripts/*.ps1 into the bundle folder, writes
+      Copies web/actions/*.json, scripts/*.ps1 and the app catalog into the bundle folder, writes
       bundle.manifest.json (sha256 of each file) and bundle.sig.
 """
 import argparse
@@ -19,6 +19,8 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 REPO = Path(__file__).resolve().parents[2]
+# Config the agent reads (app catalog = which winget ids may be installed)
+CONFIG_FILES = ["apps_common.json", "apps_teams.json"]
 
 
 def sha256(path: Path) -> str:
@@ -75,6 +77,9 @@ def build(key_path: Path, out: Path) -> None:
         shutil.copy2(p, out / "actions" / p.name)
     for p in sorted((REPO / "scripts").glob("*.ps1")):
         shutil.copy2(p, out / "scripts" / p.name)
+    (out / "config").mkdir()
+    for name in CONFIG_FILES:
+        shutil.copy2(REPO / "config" / name, out / "config" / name)
     files = sign_dir(out, key)
     print(f"signed {len(files)} files into {out}")
     print(f"public key: {public_hex(key)}")

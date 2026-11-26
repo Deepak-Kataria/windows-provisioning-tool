@@ -1,0 +1,20 @@
+{
+  "id": "apps.install",
+  "title": "Install apps",
+  "description": "Installs apps from the app catalog (Common + Team apps) with winget, one after another.",
+  "min_role": "technician",
+  "timeout_seconds": 5400,
+  "params": {
+    "required": ["ids"],
+    "properties": {
+      "ids": {
+        "type": "array",
+        "items": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9.+_-]{0,99}$"},
+        "minItems": 1,
+        "maxItems": 50,
+        "uniqueItems": true
+      }
+    }
+  },
+  "agent": {"type": "builtin", "name": "winget", "mode": "install"}
+}

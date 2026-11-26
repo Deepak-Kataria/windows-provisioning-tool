@@ -239,3 +239,38 @@ def test_state_roundtrip_token_not_plain_on_windows(tmp_path, monkeypatch):
     if sys.platform == "win32":
         assert "super-secret-token" not in raw
     assert State.load().token == "super-secret-token"
+
+
+# ------------------------------------------------------------------ winget catalog
+
+def test_winget_rejects_ids_outside_catalog(tmp_path):
+    action = {
+        "id": "apps.install",
+        "title": "i",
+        "min_role": "technician",
+        "params": {"properties": {"ids": {"type": "array", "items": {"type": "string"}}}},
+        "agent": {"type": "builtin", "name": "winget", "mode": "install"},
+    }
+    root, _ = make_bundle(tmp_path, [action])
+    (root / "config").mkdir()
+    (root / "config" / "apps_common.json").write_text(json.dumps({"common_apps": [{"name": "7-Zip", "winget_id": "7zip.7zip"}]}))
+    (root / "config" / "apps_teams.json").write_text(json.dumps({"teams": {}}))
+    key = Ed25519PrivateKey.generate()
+    bundle_tool.sign_dir(root, key)
+    pub = key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw).hex()
+    sent.clear()
+    ex = Executor(Bundle(root, pub), _capture, "actions")
+    msgs = run_job(ex, {"job_id": "j1", "action": "apps.install", "params": {"ids": ["Evil.Package"]}})
+    assert msgs[-1]["status"] == "failed" and "not in the app catalog" in msgs[-1]["error"]
+
+
+def test_real_action_files_all_map_to_known_handlers(monkeypatch):
+    from itops_agent import builtins
+
+    root = Path(__file__).resolve().parents[3]
+    for p in (root / "web" / "actions").glob("*.json"):
+        a = json.loads(p.read_text())["agent"]
+        if a["type"] == "builtin":
+            assert a["name"] in builtins.REGISTRY, p.name
+        else:
+            assert (root / "scripts" / a["script"]).is_file(), p.name

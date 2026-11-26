@@ -1,0 +1,15 @@
+{
+  "id": "security.fix",
+  "title": "Security fix / revert",
+  "description": "Applies (or reverts) the fix for one security check, then re-checks it.",
+  "min_role": "technician",
+  "timeout_seconds": 300,
+  "params": {
+    "required": ["check_id"],
+    "properties": {
+      "check_id": {"type": "string", "pattern": "^[a-z0-9_]{1,40}$"},
+      "mode": {"enum": ["fix", "undo"], "default": "fix"}
+    }
+  },
+  "agent": {"type": "builtin", "name": "security_fix"}
+}
