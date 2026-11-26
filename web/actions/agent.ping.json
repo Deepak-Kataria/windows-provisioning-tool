@@ -1,0 +1,13 @@
+{
+  "id": "agent.ping",
+  "title": "Ping agent",
+  "description": "Round-trip test. The agent echoes a message back without running any script.",
+  "min_role": "technician",
+  "timeout_seconds": 30,
+  "params": {
+    "properties": {
+      "message": {"type": "string", "maxLength": 200}
+    }
+  },
+  "agent": {"type": "builtin", "name": "ping"}
+}
