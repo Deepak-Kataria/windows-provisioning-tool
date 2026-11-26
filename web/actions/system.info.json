@@ -1,0 +1,9 @@
+{
+  "id": "system.info",
+  "title": "System info",
+  "description": "Hardware, Windows version, logged-in user, monitors. Read-only.",
+  "min_role": "technician",
+  "timeout_seconds": 120,
+  "params": {"properties": {}},
+  "agent": {"type": "powershell", "script": "get_system_info.ps1", "output": "kv"}
+}

@@ -20,3 +20,6 @@ web/.venv/
 *.db-journal
 .pytest_cache/
 web/agent/state/
+web/agent/build/
+web/agent/dist/
+*.key

@@ -1,0 +1,4 @@
+websockets==17.4
+cryptography==50.0.2
+jsonschema==4.26.0
+pywin32==311; sys_platform == "win32"
