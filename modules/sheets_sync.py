@@ -22,6 +22,17 @@ HEADERS = [
 ]
 
 
+def _friendly_error(exc: Exception) -> str:
+    msg = str(exc)
+    if "invalid_grant" in msg or "short-lived token" in msg or "iat and exp" in msg:
+        return (
+            "Google Sheets sync failed: This PC's system clock is out of sync.\n\n"
+            "Fix: Go to Settings → Time & Language → Date & Time → click 'Sync now'.\n"
+            "Then try again."
+        )
+    return msg
+
+
 def _extract_sheet_id(value: str) -> str:
     """Accept either a bare sheet ID or a full Google Sheets URL."""
     import re
@@ -76,7 +87,7 @@ def test_connection() -> tuple[bool, str]:
         _ = ws.title
         return True, f"Connected to '{sheet.title}' → worksheet '{ws.title}'"
     except Exception as e:
-        return False, str(e)
+        return False, _friendly_error(e)
 
 
 def _find_existing_row(all_values: list, computer_name: str, serial: str) -> int | None:
@@ -169,4 +180,4 @@ def append_row(data: dict) -> tuple[bool, str]:
         ws.append_row(new_row)
         return True, f"Row added to '{ws_name}'."
     except Exception as e:
-        return False, str(e)
+        return False, _friendly_error(e)
