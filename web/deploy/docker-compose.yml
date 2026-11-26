@@ -1,0 +1,58 @@
+# Run from web/deploy:   docker compose up -d --build
+name: itops
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      ITOPS_DOMAIN: ${ITOPS_DOMAIN:?set ITOPS_DOMAIN in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+  api:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    environment:
+      ITOPS_DATABASE_URL: postgresql+psycopg://itops:${POSTGRES_PASSWORD}@db:5432/itops
+      ITOPS_SECRET_KEY: ${ITOPS_SECRET_KEY:?set ITOPS_SECRET_KEY in .env}
+      ITOPS_BASE_URL: https://${ITOPS_DOMAIN}
+      ITOPS_COOKIE_SECURE: "true"
+      ITOPS_TRUST_PROXY: "true"
+    expose:
+      - "8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: itops
+      POSTGRES_USER: itops
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U itops -d itops"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # no ports: Postgres is only reachable from the api container
+
+volumes:
+  caddy_data:
+  caddy_config:
+  pg_data:
