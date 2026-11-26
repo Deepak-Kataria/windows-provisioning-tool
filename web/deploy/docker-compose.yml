@@ -30,6 +30,10 @@ services:
       ITOPS_BASE_URL: https://${ITOPS_DOMAIN}
       ITOPS_COOKIE_SECURE: "true"
       ITOPS_TRUST_PROXY: "true"
+      ITOPS_AGENT_DIST_DIR: /app/agent-dist
+    volumes:
+      # Copy itops-agent.exe + version.txt (from webgentuild.ps1 on the dev PC) here.
+      - ./agent-dist:/app/agent-dist:ro
     expose:
       - "8000"
     depends_on:

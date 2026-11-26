@@ -196,7 +196,57 @@ async def winget(ctx: JobContext, params: dict, spec: dict):
     return (1 if failed else 0), {"apps": rows, "failed": failed}
 
 
+# ---------------------------------------------------------------- self-uninstall
+
+def _cleanup_script(install_dir: str, state_dir: str) -> str:
+    q = lambda p: "'" + p.replace("'", "''") + "'"  # noqa: E731  (PowerShell single-quoted literal)
+    return (
+        "Start-Sleep -Seconds 5\n"
+        "sc.exe stop ITOpsAgent | Out-Null\n"
+        "Start-Sleep -Seconds 3\n"
+        "sc.exe delete ITOpsAgent | Out-Null\n"
+        "Get-Process itops-agent -ErrorAction SilentlyContinue | Stop-Process -Force\n"
+        "Start-Sleep -Seconds 2\n"
+        f"Remove-Item -LiteralPath {q(install_dir)} -Recurse -Force -ErrorAction SilentlyContinue\n"
+        f"Remove-Item -LiteralPath {q(state_dir)} -Recurse -Force -ErrorAction SilentlyContinue\n"
+    )
+
+
+async def uninstall(ctx: JobContext, _params: dict, _spec: dict):
+    """Remove this agent: service, program folder and enrollment state. The server revokes
+    the machine when this job succeeds, so the token is dead even if cleanup fails."""
+    import base64
+    import subprocess
+
+    from .paths import state_dir
+    from .state import State
+
+    frozen = getattr(sys, "frozen", False)
+    sdir = str(state_dir())
+    if not frozen:
+        State.clear()
+        await ctx.sink.line("source/dev agent: enrollment removed; stop it by hand", "system")
+        asyncio.get_running_loop().call_later(3, os._exit, 0)
+        return 0, {"removed": ["state"]}
+    install_dir = os.path.dirname(sys.executable)
+    script = _cleanup_script(install_dir, sdir)
+    encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+    cmd = ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+           "-EncodedCommand", encoded]
+    # Not DETACHED_PROCESS: powershell.exe exits at once without a console. NO_WINDOW gives it a hidden one.
+    flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+    try:
+        # Leave any job object, or the cleanup dies together with this process.
+        subprocess.Popen(cmd, creationflags=flags | subprocess.CREATE_BREAKAWAY_FROM_JOB, close_fds=True)
+    except OSError:
+        subprocess.Popen(cmd, creationflags=flags, close_fds=True)
+    await ctx.sink.line(f"Removing service ITOpsAgent, {install_dir} and {sdir} in a few seconds.", "system")
+    asyncio.get_running_loop().call_later(4, os._exit, 0)  # after job_done is sent
+    return 0, {"removed": ["service", install_dir, sdir]}
+
+
 REGISTRY = {
+    "uninstall": uninstall,
     "ping": ping,
     "security_scan": security_scan,
     "security_fix": security_fix,

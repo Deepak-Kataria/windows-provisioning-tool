@@ -42,7 +42,7 @@ class Bundle:
         self.dev = not key_hex
         self.files: dict[str, str] = {}
         if self.dev:
-            if os.environ.get("ITOPS_AGENT_DEV") != "1":
+            if os.environ.get("ITOPS_AGENT_DEV") != "1" and not bundle_key.ALLOW_UNSIGNED:
                 raise BundleError("agent has no bundle key; set ITOPS_AGENT_DEV=1 for dev mode")
             log.warning("DEV MODE: script bundle signature is NOT checked")
             return

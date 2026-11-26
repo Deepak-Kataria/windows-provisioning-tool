@@ -1,0 +1,9 @@
+{
+  "id": "agent.uninstall",
+  "title": "Uninstall agent",
+  "description": "Removes the agent service and files from the PC. The machine is revoked on the server.",
+  "min_role": "admin",
+  "timeout_seconds": 60,
+  "params": {"properties": {}},
+  "agent": {"type": "builtin", "name": "uninstall"}
+}

@@ -13,7 +13,8 @@ How to run/test locally: [`web/README.md`](../web/README.md).
       app catalog API, latest result per machine, security CSV export
 - [x] Web UI: login + MFA QR setup, dashboard, machines (+ add machine), machine detail
       (overview, security fix/revert, apps, history), jobs + live output, users, audit, account
-- [ ] Agent exe (PyInstaller) + agent-setup
+- [x] Web-only agent install: one-line PowerShell from Add machine, agent downloaded with
+      enrollment code, Windows service, Uninstall agent from web (auto-revoke). Exe never handed out.
 - [ ] Phase 2+: debloat, tweaks, telemetry, cleanup, bulk actions, groups, ...
 - [ ] Deploy on the Ubuntu server (waiting on server + DNS)
 

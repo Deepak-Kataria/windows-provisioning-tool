@@ -43,6 +43,8 @@ class Settings(BaseSettings):
 
     # Directory holding action definitions (*.json)
     actions_dir: Path = WEB_DIR / "actions"
+    # Built agent (itops-agent.exe + version.txt) served to PCs that hold a valid enrollment code
+    agent_dist_dir: Path = WEB_DIR / "agent" / "dist"
     # Desktop app config (app catalog: apps_common.json, apps_teams.json)
     config_dir: Path = REPO_DIR / "config"
 

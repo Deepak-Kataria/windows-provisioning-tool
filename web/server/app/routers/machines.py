@@ -56,7 +56,11 @@ def create_code(
     db.add(ec)
     db.commit()
     audit(db, "enrollment_code_created", user=me, ip=client_ip(request), code_id=ec.id, label=ec.label)
-    return EnrollmentCodeOut(id=ec.id, code=code, label=ec.label, expires_at=ec.expires_at)
+    from .install import install_command
+
+    return EnrollmentCodeOut(
+        id=ec.id, code=code, label=ec.label, expires_at=ec.expires_at, install_command=install_command(code)
+    )
 
 
 @router.get("/enrollment-codes", response_model=list[EnrollmentCodeInfo])

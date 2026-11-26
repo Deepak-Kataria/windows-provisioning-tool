@@ -66,8 +66,8 @@ def sign_dir(root: Path, key: Ed25519PrivateKey) -> dict:
     return files
 
 
-def build(key_path: Path, out: Path) -> None:
-    key = load_key(key_path)
+def build(key_path: Path | None, out: Path) -> None:
+    key = load_key(key_path) if key_path else None
     if out.exists():
         shutil.rmtree(out)
     (out / "actions").mkdir(parents=True)
@@ -80,6 +80,9 @@ def build(key_path: Path, out: Path) -> None:
     (out / "config").mkdir()
     for name in CONFIG_FILES:
         shutil.copy2(REPO / "config" / name, out / "config" / name)
+    if key is None:
+        print(f"UNSIGNED dev bundle in {out} (agent must be built with ALLOW_UNSIGNED)")
+        return
     files = sign_dir(out, key)
     print(f"signed {len(files)} files into {out}")
     print(f"public key: {public_hex(key)}")
@@ -91,13 +94,15 @@ def main() -> None:
     k = sub.add_parser("keygen")
     k.add_argument("--out", type=Path, required=True)
     b = sub.add_parser("build")
-    b.add_argument("--key", type=Path, required=True)
+    g = b.add_mutually_exclusive_group(required=True)
+    g.add_argument("--key", type=Path)
+    g.add_argument("--unsigned", action="store_true", help="dev only: no signature")
     b.add_argument("--out", type=Path, default=REPO / "web" / "agent" / "build" / "bundle")
     a = p.parse_args()
     if a.cmd == "keygen":
         keygen(a.out)
     else:
-        build(a.key, a.out)
+        build(None if a.unsigned else a.key, a.out)
 
 
 if __name__ == "__main__":

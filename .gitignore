@@ -24,3 +24,4 @@ web/agent/build/
 web/agent/dist/
 *.key
 web/.dev/
+web/deploy/agent-dist/

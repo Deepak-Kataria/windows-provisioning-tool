@@ -41,8 +41,24 @@ async function loadMachine() {
       h("button", { class: "btn", onclick: () => runAction(MID, "agent.ping", { message: "from web" }, "Ping agent") }, "Ping"),
     );
   }
-  if (can("admin")) acts.append(h("button", { class: "btn danger", onclick: revoke }, "Revoke"));
+  if (can("admin")) {
+    acts.append(
+      h("button", { class: "btn", onclick: uninstallAgent, disabled: !machine.online, title: machine.online ? null : "Machine must be online" }, "Uninstall agent"),
+      h("button", { class: "btn danger", onclick: revoke }, "Revoke"));
+  }
   return true;
+}
+
+async function uninstallAgent() {
+  const ok = await confirmDialog("Uninstall agent",
+    `Removes the agent service and its files from ${machine.hostname}, then revokes the machine here. `
+    + `To manage it again you need a new install command.`, { okText: "Uninstall", danger: true });
+  if (!ok) return;
+  try {
+    const j = await runAction(MID, "agent.uninstall", {}, "Uninstall agent");
+    if (j?.status === "succeeded") toast("Agent removed and machine revoked", "ok");
+    loadMachine();
+  } catch (e) { toastError(e); }
 }
 
 async function editLabel() {

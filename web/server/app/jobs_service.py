@@ -162,6 +162,14 @@ def job_done(
         job.finished_at = utcnow()
         if job.started_at is None:
             job.started_at = job.finished_at
+        if job.action_id == "agent.uninstall" and status == "succeeded":
+            from .models import Machine
+
+            m = db.get(Machine, machine_id)
+            if m is not None and m.revoked_at is None:
+                m.revoked_at = job.finished_at  # agent removed itself: its token must die too
+                audit(db, "machine_revoked", username="agent", machine_id=machine_id, commit=False,
+                      reason="agent uninstalled", hostname=m.hostname)
         audit(
             db,
             "job_finished",

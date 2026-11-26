@@ -6,7 +6,7 @@ handler compiled into the agent. No shell is used and no string from the server 
 executed as code.
 
 "agent" block in an action file:
-  {"type": "builtin", "name": "ping"}         # see builtins.py
+  {"type": "builtin", "name": "ping"}         # see handlers.py
   {"type": "powershell",
    "script": "get_system_info.ps1",          # file in scripts/
    "args": {"NewName": "new_name"},          # -NewName <params.new_name>; bool -> switch
@@ -155,11 +155,11 @@ class JobContext:
 
 class Executor:
     def __init__(self, bundle: Bundle, send: Send, actions_prefix: str) -> None:
-        from . import builtins  # late import: builtins import this module
+        from . import handlers  # late import: handlers import this module
 
         self.bundle = bundle
         self.send = send
-        self.builtins = builtins.REGISTRY
+        self.builtins = handlers.REGISTRY
         self.actions = load_actions(bundle, actions_prefix)
         self.tasks: dict[str, asyncio.Task] = {}
         log.info("loaded %d actions: %s", len(self.actions), ", ".join(sorted(self.actions)))

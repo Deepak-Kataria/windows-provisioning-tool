@@ -265,12 +265,12 @@ def test_winget_rejects_ids_outside_catalog(tmp_path):
 
 
 def test_real_action_files_all_map_to_known_handlers(monkeypatch):
-    from itops_agent import builtins
+    from itops_agent import handlers
 
     root = Path(__file__).resolve().parents[3]
     for p in (root / "web" / "actions").glob("*.json"):
         a = json.loads(p.read_text())["agent"]
         if a["type"] == "builtin":
-            assert a["name"] in builtins.REGISTRY, p.name
+            assert a["name"] in handlers.REGISTRY, p.name
         else:
             assert (root / "scripts" / a["script"]).is_file(), p.name

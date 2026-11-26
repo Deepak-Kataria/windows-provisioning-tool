@@ -54,20 +54,27 @@ async function addMachine() {
   ], { okText: "Create code", intro: "Creates a one-time enrollment code, valid for 24 hours." });
   if (!v) return;
   try {
-    const c = await api("/api/enrollment-codes", { method: "POST", json: { label: v.label } });
-    const server = location.origin;
-    const cmd = `itops-agent enroll --server ${server} --code ${c.code}`;
+    const [c, pkg] = await Promise.all([
+      api("/api/enrollment-codes", { method: "POST", json: { label: v.label } }),
+      api("/api/agent/package"),
+    ]);
     const copy = (text) => navigator.clipboard?.writeText(text).then(() => toast("Copied"), () => toast("Copy failed", "error"));
-    dialog("Enrollment code", h("div", { class: "stack" },
-      h("div", { class: "code-box" }, c.code),
-      h("p", { class: "muted small" }, `Single use. Expires ${fmtTime(c.expires_at)}. It is shown only once.`),
-      h("p", {}, "On the PC, as administrator, run the agent setup and enter this code, or run:"),
-      h("pre", { class: "json wrap" }, cmd),
+    dialog("Install the agent", h("div", { class: "stack" },
+      pkg.available ? null : h("div", { class: "banner warn" },
+        "The agent build is not on the server yet, so this command will fail. Build it with web\agent\build.ps1 and upload it first."),
+      h("ol", { class: "steps" },
+        h("li", {}, "On the new PC, open ", h("b", {}, "PowerShell as Administrator"), "."),
+        h("li", {}, "Paste this command and press Enter:")),
+      h("pre", { class: "json wrap" }, c.install_command),
+      h("p", { class: "muted small" },
+        `It downloads the agent from this server, installs it as a Windows service and enrolls the PC. `
+        + `Works once, until ${fmtTime(c.expires_at)}. Shown only now.`),
+      h("details", {}, h("summary", { class: "muted small" }, "Enrollment code only"), h("div", { class: "code-box" }, c.code)),
     ), {
+      wide: true,
       buttons: [
-        h("button", { class: "btn", onclick: () => copy(c.code) }, "Copy code"),
-        h("button", { class: "btn", onclick: () => copy(cmd) }, "Copy command"),
-        h("button", { class: "btn primary", onclick: (e) => e.target.closest("dialog").close() }, "Done"),
+        h("button", { class: "btn primary", onclick: () => copy(c.install_command) }, "Copy command"),
+        h("button", { class: "btn", onclick: (e) => e.target.closest("dialog").close() }, "Done"),
       ],
     });
     loadCodes();

@@ -52,6 +52,25 @@ Run the agent from an **elevated** terminal for real results (as a service it ru
 Command-line client (no browser): `web\dev.ps1 cli login`, `cli machines`, `cli run <PC> system.info`.
 API docs (dev only): http://127.0.0.1:8000/api/docs. Start fresh: delete `web\.dev\`.
 
+## Installing the agent on a PC (web only, no exe handed out)
+
+1. Web console -> Machines -> **Add machine** -> **Copy command**.
+2. On the PC: PowerShell **as Administrator**, paste, Enter.
+3. It downloads the agent from the server (only with a valid, unused code), installs the
+   `ITOpsAgent` service and enrolls. The PC appears online within seconds.
+4. When done with a PC: machine page -> **Uninstall agent** (removes service + files, revokes it).
+
+The agent exe is built on the dev PC only and uploaded to the server, never given to anyone:
+
+```powershell
+# local testing (unsigned; the dev server serves webgent\dist automatically)
+powershell -ExecutionPolicy Bypass -File webgentuild.ps1 -Unsigned
+# production (signed bundle; key kept off the server)
+python web	oolsundle_tool.py keygen --out C:\keys\itops-bundle.key     # once
+powershell -ExecutionPolicy Bypass -File webgentuild.ps1 -Key C:\keys\itops-bundle.key
+# then copy webgent\dist\itops-agent.exe + version.txt to the server: /opt/itops/web/deploy/agent-dist/
+```
+
 ## Security model (short)
 
 - Login = password + **mandatory TOTP**. Lockout after 5 failures, per-IP rate limit, generic errors.

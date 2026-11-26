@@ -18,7 +18,7 @@ from .config import Settings, get_settings
 from .db import Base, get_engine, init_engine, new_session, utcnow
 from .models import WebSession
 from . import web
-from .routers import agent, auth, catalog, jobs, machines, users
+from .routers import agent, auth, catalog, install, jobs, machines, users
 
 APP_VERSION = "0.1.0"
 
@@ -86,7 +86,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             h.setdefault("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
         return response
 
-    for r in (auth.router, users.router, machines.router, jobs.router, catalog.router, agent.router):
+    for r in (auth.router, users.router, machines.router, jobs.router, catalog.router, agent.router, install.router):
         app.include_router(r)
     app.include_router(web.router)
     app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")

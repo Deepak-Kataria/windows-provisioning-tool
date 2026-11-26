@@ -78,6 +78,11 @@ class EnrollmentCodeOut(BaseModel):
     code: str  # shown once
     label: str
     expires_at: datetime
+    install_command: str = ""  # one PowerShell line that installs + enrolls the agent
+
+
+class CodeDownloadIn(BaseModel):
+    code: str = Field(min_length=16, max_length=32)
 
 
 class EnrollmentCodeInfo(BaseModel):
