@@ -1,6 +1,7 @@
 import {
   ACTIVE, api, badge, can, clear, confirmDialog, fmtTime, formDialog, h, runAction, table, timeEl, toast, toastError,
 } from "/static/app.js";
+import { renderCleanup, renderDebloat, renderTweaks } from "/static/pages/machine2.js";
 
 const root = document.getElementById("machine");
 const MID = root.dataset.id;
@@ -26,6 +27,7 @@ async function loadMachine() {
   clear(document.getElementById("m-sub")).append(
     status,
     machine.label ? ` · ${machine.label}` : "",
+    machine.tags?.length ? [" · ", machine.tags.map((t) => h("a", { class: "tag", href: `/machines?tag=${encodeURIComponent(t)}` }, t))] : "",
     ` · last seen `, machine.online ? "now" : timeEl(machine.last_seen_at),
     machine.agent_version ? ` · agent ${machine.agent_version}` : "",
     machine.last_ip ? ` · ${machine.last_ip}` : "",
@@ -37,7 +39,7 @@ async function loadMachine() {
   }
   if (can("technician")) {
     acts.append(
-      h("button", { class: "btn", onclick: editLabel }, "Edit label"),
+      h("button", { class: "btn", onclick: editLabel }, "Edit"),
       h("button", { class: "btn", onclick: () => runAction(MID, "agent.ping", { message: "from web" }, "Ping agent") }, "Ping"),
     );
   }
@@ -62,9 +64,14 @@ async function uninstallAgent() {
 }
 
 async function editLabel() {
-  const v = await formDialog("Edit label", [{ name: "label", label: "Label", value: machine.label, maxlength: 128 }]);
+  const v = await formDialog(`Edit ${machine.hostname}`, [
+    { name: "label", label: "Label", value: machine.label, maxlength: 128 },
+    { name: "tags", label: "Tags", value: (machine.tags || []).join(", "), maxlength: 400,
+      help: "Comma separated, e.g. sales, floor2. Use tags to run an action on a group of PCs." },
+  ]);
   if (!v) return;
-  try { await api(`/api/machines/${MID}`, { method: "PATCH", json: { label: v.label } }); loadMachine(); }
+  const tags = v.tags.split(",").map((t) => t.trim()).filter(Boolean);
+  try { await api(`/api/machines/${MID}`, { method: "PATCH", json: { label: v.label, tags } }); loadMachine(); }
   catch (e) { toastError(e); }
 }
 
@@ -275,7 +282,16 @@ async function renderHistory() {
 
 // ---------------------------------------------------------------- tabs
 
-const RENDER = { overview: renderOverview, security: renderSecurity, apps: renderApps, history: renderHistory };
+const ctx = () => ({ id: MID, hostname: machine.hostname, canRun: canRun() });
+const RENDER = {
+  overview: renderOverview,
+  security: renderSecurity,
+  apps: renderApps,
+  debloat: () => renderDebloat(panels.debloat, ctx()),
+  tweaks: () => renderTweaks(panels.tweaks, ctx()),
+  cleanup: () => renderCleanup(panels.cleanup, ctx()),
+  history: renderHistory,
+};
 
 async function show(tab) {
   root.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));

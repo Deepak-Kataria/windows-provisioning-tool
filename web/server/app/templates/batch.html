@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Bulk run - IT Provisioning{% endblock %}
+{% block content %}
+<div id="batch" data-id="{{ batch_id }}">
+  <div class="page-head">
+    <div><a href="/jobs" class="muted">Jobs</a><h1 id="b-title">Bulk run</h1><div id="b-sub" class="muted"></div></div>
+    <div class="actions" id="b-actions"></div>
+  </div>
+  <div class="tiles" id="b-tiles"></div>
+  <section class="card flush"><div id="b-table"></div></section>
+</div>
+{% endblock %}
+{% block scripts %}<script type="module" src="/static/pages/batch.js"></script>{% endblock %}

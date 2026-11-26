@@ -15,7 +15,11 @@ How to run/test locally: [`web/README.md`](../web/README.md).
       (overview, security fix/revert, apps, history), jobs + live output, users, audit, account
 - [x] Web-only agent install: one-line PowerShell from Add machine, agent downloaded with
       enrollment code, Windows service, Uninstall agent from web (auto-revoke). Exe never handed out.
-- [ ] Phase 2+: debloat, tweaks, telemetry, cleanup, bulk actions, groups, ...
+- [x] Phase 2: Debloat (remove/reinstall), Tweaks (apply/undo, preferences, power plan; per-user
+      settings go to signed-in users), Cleanup (Windows, user profiles, disk/folder sizes),
+      machine tags, bulk run on selected machines or a tag with batch progress page.
+      Legacy Telemetry tab not ported: covered by Tweaks (as in the desktop app).
+- [ ] Phase 3: PC rename, domain join (OU browser), hardware ID, Threat Report, restart/shutdown
 - [ ] Deploy on the Ubuntu server (waiting on server + DNS)
 
 ## Decisions (from user)

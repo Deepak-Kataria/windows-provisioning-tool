@@ -45,8 +45,9 @@ powershell -ExecutionPolicy Bypass -File web\dev.ps1 enroll XXXX-XXXX-XXXX-XXXX
 powershell -ExecutionPolicy Bypass -File web\dev.ps1 agent
 ```
 
-The PC shows up online. Open it: Overview (system info), Security (scan, fix/revert,
-CSV export), Apps (install/uninstall from catalog), Job history. Jobs and Audit log pages too.
+The PC shows up online. Open it: Overview, Security (scan, fix/revert, CSV), Apps, Debloat,
+Tweaks, Cleanup (Windows / user profiles / disk), Job history. On Machines, tick PCs (or pick a
+tag) and **Run on selected** to run one action on many PCs. Jobs and Audit log pages too.
 
 Run the agent from an **elevated** terminal for real results (as a service it runs as SYSTEM).
 Command-line client (no browser): `web\dev.ps1 cli login`, `cli machines`, `cli run <PC> system.info`.

@@ -10,8 +10,13 @@
   <select id="online" aria-label="Filter by status">
     <option value="">All</option><option value="true">Online</option><option value="false">Offline</option>
   </select>
+  <select id="tag" aria-label="Filter by tag"><option value="">Any tag</option></select>
   <label class="check"><input type="checkbox" id="revoked"> Show revoked</label>
   <span class="muted" id="count"></span>
+  {% if user.role in ('technician', 'admin') %}
+  <span style="flex:1"></span>
+  <button class="btn primary" id="bulk" disabled>Run on selected</button>
+  {% endif %}
 </div>
 <section class="card flush"><div id="machine-table"></div></section>
 {% if user.role == 'admin' %}

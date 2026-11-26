@@ -59,7 +59,7 @@ export function h(tag, attrs = {}, ...children) {
     else if (v === true) el.setAttribute(k, "");
     else el.setAttribute(k, v);
   }
-  for (const c of children.flat()) {
+  for (const c of children.flat(Infinity)) {
     if (c === null || c === undefined || c === false) continue;
     el.append(c instanceof Node ? c : document.createTextNode(String(c)));
   }
@@ -258,3 +258,29 @@ $("#logout")?.addEventListener("click", async () => {
   try { await api("/api/auth/logout", { method: "POST" }); } catch { /* already gone */ }
   location.href = "/login";
 });
+
+// ---------------------------------------------------------------- phase 2 helpers
+
+export function fmtBytes(n) {
+  if (n === null || n === undefined) return "-";
+  const u = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  let v = Number(n);
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i += 1; }
+  return `${v.toFixed(v >= 100 || i === 0 ? 0 : 1)} ${u[i]}`;
+}
+
+/** Run a job without the console window; resolves with the finished job. */
+export async function runAndWait(machineId, action, params = {}, { timeoutMs = 30 * 60e3 } = {}) {
+  let job = await api(`/api/machines/${machineId}/jobs`, { method: "POST", json: { action, params } });
+  const until = Date.now() + timeoutMs;
+  while (ACTIVE.has(job.status) && Date.now() < until) {
+    await new Promise((r) => setTimeout(r, 1500));
+    job = await api(`/api/jobs/${job.id}`);
+  }
+  return job;
+}
+
+export function checkbox(checked, onchange, attrs = {}) {
+  return h("input", { type: "checkbox", checked, onchange: (e) => onchange(e.target.checked), ...attrs });
+}

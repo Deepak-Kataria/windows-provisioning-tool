@@ -25,7 +25,7 @@ def test_pending_mfa_session_cannot_see_pages(client):
 
 
 def test_admin_sees_all_pages(admin):
-    for path in ("/", "/machines", "/jobs", "/users", "/audit", "/account", "/machines/abc", "/jobs/abc"):
+    for path in ("/", "/machines", "/jobs", "/users", "/audit", "/account", "/machines/abc", "/jobs/abc", "/batches/abc"):
         r = admin.get(path)
         assert r.status_code == 200, path
         assert f'data-csrf="{admin.csrf}"' in r.text

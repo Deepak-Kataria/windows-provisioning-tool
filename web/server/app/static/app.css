@@ -199,3 +199,17 @@ dialog h2 { margin-bottom: 14px; }
 dialog p { white-space: pre-line; }
 pre.json.wrap { white-space: pre-wrap; word-break: break-all; }
 .steps { margin: 0; padding-left: 20px; } .steps li { margin: 2px 0; }
+.subtabs { display: flex; gap: 6px; margin-bottom: 12px; }
+.subtabs button { background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); border-radius: 16px; padding: 4px 14px; cursor: pointer; font: inherit; }
+.subtabs button.active { color: var(--accent-text); background: var(--accent); border-color: var(--accent); }
+.bar { height: 8px; background: var(--panel-3); border-radius: 4px; overflow: hidden; min-width: 120px; }
+.bar > span { display: block; height: 100%; background: var(--accent); }
+.bar.warn > span { background: var(--warn); }
+.bar.fail > span { background: var(--fail); }
+.tag { display: inline-block; background: var(--accent-dim); color: var(--bright); border-radius: 4px; padding: 0 6px; font-size: 11.5px; margin: 0 3px 2px 0; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg button { background: transparent; border: 0; color: var(--muted); padding: 5px 12px; cursor: pointer; font: inherit; }
+.seg button.active { background: var(--accent-dim); color: var(--bright); }
+.list-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 2px 16px; }
+.dim-row { opacity: .45; }
+td.check, th.check { width: 32px; }

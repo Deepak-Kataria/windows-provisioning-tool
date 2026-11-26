@@ -82,3 +82,11 @@ def job_page(job_id: str, request: Request, db: Session = Depends(get_db)):
     if ws is None:
         return RedirectResponse("/login", status_code=303)
     return _render(request, ws, "job.html", "jobs", "viewer", job_id=job_id)
+
+
+@router.get("/batches/{batch_id}", response_class=HTMLResponse)
+def batch_page(batch_id: str, request: Request, db: Session = Depends(get_db)):
+    ws = _session(request, db)
+    if ws is None:
+        return RedirectResponse("/login", status_code=303)
+    return _render(request, ws, "batch.html", "jobs", "viewer", batch_id=batch_id)

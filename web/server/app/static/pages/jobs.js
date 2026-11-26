@@ -25,7 +25,21 @@ async function load(append = false) {
   } catch (e) { toastError(e); }
 }
 
+async function loadBatches() {
+  try {
+    const b = await api("/api/batches", { query: { limit: 10 } });
+    if (!b.length) return;
+    document.getElementById("batches-card").hidden = false;
+    clear(document.getElementById("batches")).append(table([
+      { label: "Started", render: (x) => timeEl(x.created_at) },
+      { label: "Action", key: "action" },
+      { label: "Machines", key: "total", num: true },
+    ], b, { onRow: (x) => { location.href = `/batches/${x.batch_id}`; } }));
+  } catch (e) { toastError(e); }
+}
+
 (async () => {
+  loadBatches();
   try {
     const [machines, actions] = await Promise.all([
       api("/api/machines", { query: { limit: 1000, include_revoked: true } }),
