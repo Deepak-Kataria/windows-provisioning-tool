@@ -87,6 +87,17 @@ class Machine(Base):
     agent_version: Mapped[str] = mapped_column(String(32), default="")
     os_info: Mapped[dict] = mapped_column(JSON, default=dict)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # ",tag1,tag2," so a tag filter is a portable LIKE '%,tag,%' on SQLite and Postgres
+    tags_csv: Mapped[str] = mapped_column(String(800), default="", server_default="")
+
+    @property
+    def tags(self) -> list[str]:
+        return [t for t in self.tags_csv.split(",") if t]
+
+    @tags.setter
+    def tags(self, value: list[str]) -> None:
+        clean = sorted({t.strip().lower() for t in value if t.strip()})
+        self.tags_csv = ("," + ",".join(clean) + ",") if clean else ""
 
 
 JOB_STATUSES = ("queued", "sent", "running", "succeeded", "failed", "cancelled")
@@ -109,6 +120,7 @@ class Job(Base):
     exit_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
     result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     error: Mapped[str] = mapped_column(Text, default="")
+    batch_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
 
     __table_args__ = (
         Index("ix_jobs_machine_status", "machine_id", "status"),

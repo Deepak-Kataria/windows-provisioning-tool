@@ -34,6 +34,32 @@ def load_app_catalog() -> dict:
     }
 
 
+def _config_json(name: str):
+    try:
+        return json.loads((get_settings().config_dir / name).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, f"{name} not available") from None
+
+
+@router.get("/catalog/debloat")
+def debloat_catalog(_: User = Depends(require_role("viewer"))):
+    return [
+        {"name": a["name"], "package": a["package"], "category": a["category"]}
+        for a in _config_json("debloat_list.json")["appx_packages"]
+    ]
+
+
+@router.get("/catalog/tweaks")
+def tweaks_catalog(_: User = Depends(require_role("viewer"))):
+    cfg = _config_json("tweaks.json")
+    return [
+        {"id": t["id"], "name": t["name"], "description": t.get("description", ""), "section": s,
+         "can_undo": bool(t.get("undo"))}
+        for s in ("essential", "advanced", "privacy", "org")
+        for t in cfg.get(s, [])
+    ]
+
+
 @router.get("/catalog/apps")
 def app_catalog(_: User = Depends(require_role("viewer"))):
     return load_app_catalog()

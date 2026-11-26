@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY web/server/ /app/server/
 COPY web/actions/ /app/actions/
-COPY config/apps_common.json config/apps_teams.json /app/config/
+COPY config/apps_common.json config/apps_teams.json config/debloat_list.json config/tweaks.json /app/config/
 
 USER itops
 EXPOSE 8000

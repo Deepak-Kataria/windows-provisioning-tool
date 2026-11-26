@@ -46,7 +46,7 @@ if ($LASTEXITCODE -ne 0) { throw "bundle build failed" }
 # fail fast: PyInstaller silently skips modules that do not compile
 & $Py -m compileall -q (Join-Path $Agent "itops_agent")
 if ($LASTEXITCODE -ne 0) { throw "agent code has syntax errors" }
-& $Py -c "import sys; sys.path[:0] = [r'$Agent', r'$Repo']; import itops_agent.handlers, modules.security_checks"
+& $Py -c "import sys; sys.path[:0] = [r'$Agent', r'$Repo']; import itops_agent.handlers, modules.security_checks, modules.cleanup_locations, modules.reg_state"
 if ($LASTEXITCODE -ne 0) { throw "agent modules failed to import" }
 
 $version = (& $Py -c "import sys; sys.path.insert(0, r'$Agent'); import itops_agent; print(itops_agent.VERSION)").Trim()
@@ -66,6 +66,8 @@ ALLOW_UNSIGNED = $allow
             --distpath $Dist --workpath (Join-Path $Build "pyi") --specpath $Build `
             --paths $Agent --paths $Repo `
             --hidden-import modules.security_checks `
+            --hidden-import modules.cleanup_locations `
+            --hidden-import modules.reg_state `
             --hidden-import win32timezone `
             --collect-submodules itops_agent `
             --add-data "$Bundle;." `

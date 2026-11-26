@@ -5,6 +5,8 @@
 !web/actions/
 !config/apps_common.json
 !config/apps_teams.json
+!config/debloat_list.json
+!config/tweaks.json
 **/__pycache__
 **/*.db
 web/server/tests/

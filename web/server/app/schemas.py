@@ -1,6 +1,6 @@
 """Pydantic request/response models."""
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -121,11 +121,30 @@ class MachineOut(BaseModel):
     agent_version: str
     os_info: dict[str, Any]
     revoked_at: datetime | None
+    tags: list[str] = []
     online: bool = False
+
+
+Tag = Annotated[str, Field(pattern=r"^[A-Za-z0-9 _.-]{1,32}$")]
 
 
 class MachineUpdateIn(BaseModel):
     label: str | None = Field(default=None, max_length=128)
+    tags: list[Tag] | None = Field(default=None, max_length=20)
+
+
+class BulkJobIn(BaseModel):
+    action: str = Field(min_length=1, max_length=64)
+    params: dict[str, Any] = Field(default_factory=dict)
+    machine_ids: list[str] = Field(default_factory=list, max_length=1000)
+    tag: Tag | None = None
+
+
+class BulkJobOut(BaseModel):
+    batch_id: str
+    total: int
+    sent: int
+    queued: int
 
 
 class JobCreateIn(BaseModel):
@@ -149,6 +168,7 @@ class JobOut(BaseModel):
     exit_code: int | None
     result: dict[str, Any] | None
     error: str
+    batch_id: str | None = None
 
 
 class JobLogOut(BaseModel):

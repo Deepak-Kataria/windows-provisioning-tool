@@ -1,0 +1,23 @@
+{
+  "id": "disk.folders",
+  "title": "Disk: folder sizes",
+  "description": "Sizes of the subfolders of one folder. Read-only.",
+  "min_role": "viewer",
+  "timeout_seconds": 1800,
+  "params": {
+    "properties": {
+      "path": {
+        "type": "string",
+        "maxLength": 260,
+        "pattern": "^[A-Za-z]:\\\\[^\"`$<>|?*\\r\\n]*$"
+      }
+    },
+    "required": [
+      "path"
+    ]
+  },
+  "agent": {
+    "type": "builtin",
+    "name": "disk_folders"
+  }
+}

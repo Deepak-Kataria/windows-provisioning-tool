@@ -89,9 +89,25 @@ def delete_code(
 
 # ---------------------------------------------------------------- machines
 
+@router.get("/tags")
+def list_tags(db: Session = Depends(get_db), _: User = Depends(require_role("viewer"))):
+    counts: dict[str, int] = {}
+    for csv in db.scalars(select(Machine.tags_csv).where(Machine.revoked_at.is_(None), Machine.tags_csv != "")):
+        for t in csv.split(","):
+            if t:
+                counts[t] = counts.get(t, 0) + 1
+    return [{"tag": t, "machines": n} for t, n in sorted(counts.items())]
+
+
+def tag_filter(tag: str):
+    t = tag.strip().lower().replace("%", "").replace("_", "\_")
+    return Machine.tags_csv.like(f"%,{t},%", escape="\\")
+
+
 @router.get("/machines", response_model=list[MachineOut])
 def list_machines(
     q: str = Query(default="", max_length=128),
+    tag: str = Query(default="", max_length=32),
     online: bool | None = None,
     include_revoked: bool = False,
     limit: int = Query(default=100, ge=1, le=1000),
@@ -107,6 +123,8 @@ def list_machines(
         stmt = stmt.where(
             or_(func.lower(Machine.hostname).like(like), func.lower(Machine.label).like(like))
         )
+    if tag:
+        stmt = stmt.where(tag_filter(tag))
     if online is not None:
         ids = hub.online_ids()
         stmt = stmt.where(Machine.id.in_(ids) if online else Machine.id.not_in(ids or [""]))

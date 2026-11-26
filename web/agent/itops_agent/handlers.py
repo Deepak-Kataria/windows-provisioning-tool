@@ -252,3 +252,8 @@ REGISTRY = {
     "security_fix": security_fix,
     "winget": winget,
 }
+
+# Phase 2 handlers (debloat, tweaks, cleanup, disk)
+from . import manage  # noqa: E402
+
+REGISTRY.update(manage.REGISTRY)

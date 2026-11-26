@@ -1,0 +1,33 @@
+{
+  "id": "cleanup.profile_clean",
+  "title": "Cleanup: clean a profile",
+  "description": "Deletes junk (temp, caches, ...) from one user profile.",
+  "min_role": "technician",
+  "timeout_seconds": 1800,
+  "params": {
+    "properties": {
+      "sid": {
+        "type": "string",
+        "pattern": "^S-1-[0-9-]{1,180}$"
+      },
+      "categories": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,40}$"
+        },
+        "minItems": 1,
+        "maxItems": 100,
+        "uniqueItems": true
+      }
+    },
+    "required": [
+      "sid",
+      "categories"
+    ]
+  },
+  "agent": {
+    "type": "builtin",
+    "name": "cleanup_profile_clean"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "id": "debloat.scan",
+  "title": "Debloat: list apps",
+  "description": "Which listed Store apps are installed. Read-only.",
+  "min_role": "technician",
+  "timeout_seconds": 120,
+  "params": {
+    "properties": {}
+  },
+  "agent": {
+    "type": "builtin",
+    "name": "debloat_scan"
+  }
+}

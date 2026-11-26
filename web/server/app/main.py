@@ -42,6 +42,27 @@ async def _housekeeping() -> None:
             await asyncio.to_thread(_cleanup_sessions)
 
 
+def _dev_migrate(url: str) -> None:
+    """Local SQLite: bring the schema up to date. (Postgres: the container runs `alembic upgrade head`.)"""
+    from sqlalchemy import inspect
+
+    from . import models  # noqa: F401
+
+    if url in ("sqlite://", "sqlite:///:memory:"):
+        Base.metadata.create_all(get_engine())  # tests
+        return
+    from alembic import command
+    from alembic.config import Config
+
+    here = Path(__file__).resolve().parents[1]
+    cfg = Config(str(here / "alembic.ini"))
+    cfg.set_main_option("script_location", str(here / "alembic"))
+    tables = set(inspect(get_engine()).get_table_names())
+    if "users" in tables and "alembic_version" not in tables:
+        command.stamp(cfg, "0001")  # old dev DB made by create_all before migrations existed
+    command.upgrade(cfg, "head")
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     init_engine(settings.database_url)
@@ -49,10 +70,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         if settings.is_sqlite:
-            # Local dev convenience. Postgres uses Alembic: `alembic upgrade head`.
-            from . import models  # noqa: F401
-
-            Base.metadata.create_all(get_engine())
+            _dev_migrate(settings.database_url)
         task = asyncio.create_task(_housekeeping())
         yield
         task.cancel()

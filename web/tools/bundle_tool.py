@@ -20,7 +20,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 REPO = Path(__file__).resolve().parents[2]
 # Config the agent reads (app catalog = which winget ids may be installed)
-CONFIG_FILES = ["apps_common.json", "apps_teams.json"]
+CONFIG_FILES = ["apps_common.json", "apps_teams.json", "debloat_list.json", "tweaks.json"]
 
 
 def sha256(path: Path) -> str:

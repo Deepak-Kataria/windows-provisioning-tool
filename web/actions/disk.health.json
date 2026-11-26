@@ -1,0 +1,14 @@
+{
+  "id": "disk.health",
+  "title": "Disk: drives",
+  "description": "Drives with size, free space and health. Read-only.",
+  "min_role": "viewer",
+  "timeout_seconds": 120,
+  "params": {
+    "properties": {}
+  },
+  "agent": {
+    "type": "builtin",
+    "name": "disk_health"
+  }
+}

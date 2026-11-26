@@ -1,0 +1,24 @@
+{
+  "id": "tweaks.power",
+  "title": "Tweaks: power plan",
+  "description": "Ultimate Performance or Balanced power plan.",
+  "min_role": "technician",
+  "timeout_seconds": 120,
+  "params": {
+    "properties": {
+      "plan": {
+        "enum": [
+          "ultimate",
+          "balanced"
+        ]
+      }
+    },
+    "required": [
+      "plan"
+    ]
+  },
+  "agent": {
+    "type": "builtin",
+    "name": "tweaks_power"
+  }
+}

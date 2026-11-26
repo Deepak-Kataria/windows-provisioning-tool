@@ -1,0 +1,18 @@
+{
+  "id": "cleanup.profiles",
+  "title": "Cleanup: user profiles",
+  "description": "User profiles on the PC and how much junk each has. Read-only.",
+  "min_role": "technician",
+  "timeout_seconds": 1800,
+  "params": {
+    "properties": {
+      "sizes": {
+        "type": "boolean"
+      }
+    }
+  },
+  "agent": {
+    "type": "builtin",
+    "name": "cleanup_profiles"
+  }
+}

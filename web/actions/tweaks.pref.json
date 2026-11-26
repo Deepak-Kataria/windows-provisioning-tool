@@ -1,0 +1,26 @@
+{
+  "id": "tweaks.pref",
+  "title": "Tweaks: preference switch",
+  "description": "Turns one preference on or off for the signed-in users.",
+  "min_role": "technician",
+  "timeout_seconds": 120,
+  "params": {
+    "properties": {
+      "id": {
+        "type": "string",
+        "pattern": "^[a-z0-9_]{1,40}$"
+      },
+      "on": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "id",
+      "on"
+    ]
+  },
+  "agent": {
+    "type": "builtin",
+    "name": "tweaks_pref"
+  }
+}

@@ -274,3 +274,50 @@ def test_real_action_files_all_map_to_known_handlers(monkeypatch):
             assert a["name"] in handlers.REGISTRY, p.name
         else:
             assert (root / "scripts" / a["script"]).is_file(), p.name
+
+
+# ------------------------------------------------------------------ phase 2 (manage.py)
+
+def test_redirect_hkcu_to_user_hive():
+    from itops_agent.manage import redirect_hkcu, uses_hkcu
+
+    cmd = "Set-ItemProperty -Path 'HKCU:\Software\X' -Name 'A' -Value 1; Get-Item HKLM:\Software"
+    out = redirect_hkcu(cmd, "S-1-5-21-1-2-3-1001")
+    assert "'Registry::HKEY_USERS\S-1-5-21-1-2-3-1001\Software\X'" in out
+    assert "HKLM:\Software" in out and not uses_hkcu(out)
+
+
+def test_pref_command_quotes_values():
+    from itops_agent.manage import _pref_cmd
+
+    p = {"reg_path": "HKCU:\Software\X", "reg_name": "Hide'Ext", "on_value": 0, "off_value": "a'b"}
+    assert "-Value 0 -Type DWord" in _pref_cmd(p, True)
+    assert "-Value 'a''b' -Type String" in _pref_cmd(p, False)
+    assert "-Name 'Hide''Ext'" in _pref_cmd(p, True)
+
+
+def _repo_executor():
+    """Executor over the real repo (actions, scripts, config), unsigned dev mode."""
+    import os
+
+    os.environ["ITOPS_AGENT_DEV"] = "1"
+    root = Path(__file__).resolve().parents[3]
+    sent.clear()
+    return Executor(Bundle(root, ""), _capture, "web/actions")
+
+
+@pytest.mark.parametrize("action,params,msg", [
+    ("debloat.remove", {"packages": ["Evil.Package"]}, "not in the debloat list"),
+    ("tweaks.apply", {"ids": ["format_disk"]}, "unknown tweaks"),
+    ("cleanup.clean", {"ids": ["system32"]}, "unknown cleanup locations"),
+    ("tweaks.pref", {"id": "nope", "on": True}, "unknown preference"),
+])
+def test_phase2_ids_checked_against_signed_lists(action, params, msg):
+    msgs = run_job(_repo_executor(), {"job_id": "j", "action": action, "params": params})
+    assert msgs[-1]["status"] == "failed" and msg in msgs[-1]["error"], msgs[-1]
+
+
+def test_disk_path_must_be_plain_windows_path():
+    for bad in ["C:/x", "\\server\share", "C:\a$(calc)", "C:\a`b"]:
+        msgs = run_job(_repo_executor(), {"job_id": "j", "action": "disk.folders", "params": {"path": bad}})
+        assert "invalid params" in msgs[-1]["error"], bad

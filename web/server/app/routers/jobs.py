@@ -11,7 +11,7 @@ from fastapi import (
     WebSocketDisconnect,
     status,
 )
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
@@ -21,10 +21,10 @@ from ..audit import audit
 from ..db import get_db, new_session, utcnow
 from ..deps import _load_session, require_role
 from ..hub import hub
-from ..models import JOB_ACTIVE, JOB_STATUSES, AuditLog, Job, JobLog, User
+from ..models import JOB_ACTIVE, JOB_STATUSES, AuditLog, Job, JobLog, Machine, User, new_id
 from ..netutil import client_ip
-from ..schemas import ActionOut, AuditOut, JobCreateIn, JobLogOut, JobOut
-from .machines import get_machine
+from ..schemas import ActionOut, AuditOut, BulkJobIn, BulkJobOut, JobCreateIn, JobLogOut, JobOut
+from .machines import get_machine, tag_filter
 
 router = APIRouter(prefix="/api", tags=["jobs"])
 
@@ -96,9 +96,125 @@ async def create_job(
     return job
 
 
+MAX_BULK = 1000
+
+
+@router.post("/bulk-jobs", response_model=BulkJobOut, status_code=201)
+async def create_bulk_job(
+    body: BulkJobIn,
+    request: Request,
+    db: Session = Depends(get_db),
+    registry: Registry = Depends(get_registry),
+    me: User = Depends(require_role("technician")),
+):
+    """Run one action on many machines: explicit ids and/or every machine with a tag."""
+    try:
+        action = registry.get(body.action)
+        action.validate(body.params)
+    except ActionError as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from None
+    if not me.has_role(action.min_role):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient role for this action")
+    if action.has_secrets(body.params):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Actions with secrets run one machine at a time")
+    if action.id == "agent.uninstall":
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Uninstall agents one machine at a time")
+    if not body.machine_ids and not body.tag:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Choose machines or a tag")
+
+    stmt = select(Machine).where(Machine.revoked_at.is_(None))
+    if body.machine_ids and body.tag:
+        stmt = stmt.where(or_(Machine.id.in_(body.machine_ids), tag_filter(body.tag)))
+    elif body.machine_ids:
+        stmt = stmt.where(Machine.id.in_(body.machine_ids))
+    else:
+        stmt = stmt.where(tag_filter(body.tag))
+    machines = db.scalars(stmt.limit(MAX_BULK + 1)).all()
+    if not machines:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No matching machines")
+    if len(machines) > MAX_BULK:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"At most {MAX_BULK} machines per run")
+
+    batch_id = new_id()
+    jobs = [
+        Job(machine_id=m.id, action_id=action.id, params=dict(body.params), created_by=me.id, batch_id=batch_id)
+        for m in machines
+    ]
+    db.add_all(jobs)
+    db.commit()
+    audit(
+        db, "bulk_job_created", user=me, ip=client_ip(request), batch_id=batch_id, action=action.id,
+        params=body.params, machines=len(machines), tag=body.tag or "",
+    )
+    sent = 0
+    for job in jobs:
+        sent += await js.dispatch(job, action, body.params)
+    return BulkJobOut(batch_id=batch_id, total=len(jobs), sent=sent, queued=len(jobs) - sent)
+
+
+@router.get("/batches")
+def list_batches(
+    limit: int = Query(default=30, ge=1, le=200),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_role("viewer")),
+):
+    rows = db.execute(
+        select(Job.batch_id, Job.action_id, func.min(Job.created_at), func.count(), Job.created_by)
+        .where(Job.batch_id.is_not(None))
+        .group_by(Job.batch_id, Job.action_id, Job.created_by)
+        .order_by(func.min(Job.created_at).desc())
+        .limit(limit)
+    ).all()
+    return [
+        {"batch_id": b, "action": a, "created_at": c, "total": n, "created_by": u}
+        for b, a, c, n, u in rows
+    ]
+
+
+@router.get("/batches/{batch_id}")
+def get_batch(batch_id: str, db: Session = Depends(get_db), _: User = Depends(require_role("viewer"))):
+    rows = db.execute(
+        select(Job, Machine.hostname)
+        .join(Machine, Machine.id == Job.machine_id)
+        .where(Job.batch_id == batch_id)
+        .order_by(Machine.hostname)
+    ).all()
+    if not rows:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Batch not found")
+    counts: dict[str, int] = {}
+    jobs = []
+    for job, hostname in rows:
+        counts[job.status] = counts.get(job.status, 0) + 1
+        jobs.append({**JobOut.model_validate(job).model_dump(), "hostname": hostname})
+    first = rows[0][0]
+    return {
+        "batch_id": batch_id, "action": first.action_id, "params": first.params,
+        "created_at": first.created_at, "total": len(jobs), "counts": counts, "jobs": jobs,
+    }
+
+
+@router.post("/batches/{batch_id}/cancel")
+async def cancel_batch(
+    batch_id: str, request: Request, db: Session = Depends(get_db), me: User = Depends(require_role("technician"))
+):
+    jobs = db.scalars(select(Job).where(Job.batch_id == batch_id, Job.status.in_(JOB_ACTIVE))).all()
+    queued = [j for j in jobs if j.status == "queued"]
+    for job in queued:
+        job.status, job.error, job.finished_at = "cancelled", f"cancelled by {me.username}", utcnow()
+    db.commit()
+    for job in jobs:
+        if job in queued:
+            hub.publish(job.id, {"type": "status", "status": "cancelled"})
+        else:
+            await hub.send(job.machine_id, {"type": "cancel", "job_id": job.id})
+    audit(db, "batch_cancel_requested", user=me, ip=client_ip(request), batch_id=batch_id, jobs=len(jobs))
+    return {"cancelled": len(jobs)}
+
+
 @router.get("/jobs", response_model=list[JobOut])
 def list_jobs(
     machine_id: str | None = None,
+    batch_id: str | None = None,
     status_: str | None = Query(default=None, alias="status"),
     action: str | None = None,
     limit: int = Query(default=50, ge=1, le=500),
@@ -109,6 +225,8 @@ def list_jobs(
     stmt = select(Job).order_by(Job.created_at.desc())
     if machine_id:
         stmt = stmt.where(Job.machine_id == machine_id)
+    if batch_id:
+        stmt = stmt.where(Job.batch_id == batch_id)
     if status_:
         if status_ not in JOB_STATUSES:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "bad status")

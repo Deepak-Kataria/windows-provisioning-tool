@@ -11,7 +11,7 @@ import sys
 from sqlalchemy import delete, select
 
 from .config import get_settings
-from .db import Base, get_engine, new_session
+from .db import new_session
 from .models import User, WebSession
 from .security import hash_password, password_problem
 
@@ -35,7 +35,9 @@ def main(argv: list[str] | None = None) -> None:
     args = p.parse_args(argv)
 
     if get_settings().is_sqlite:
-        Base.metadata.create_all(get_engine())
+        from .main import _dev_migrate
+
+        _dev_migrate(get_settings().database_url)
 
     with new_session() as db:
         if args.cmd == "create-admin":

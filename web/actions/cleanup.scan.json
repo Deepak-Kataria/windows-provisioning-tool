@@ -1,0 +1,14 @@
+{
+  "id": "cleanup.scan",
+  "title": "Cleanup: scan",
+  "description": "Size of each Windows cleanup location. Read-only.",
+  "min_role": "technician",
+  "timeout_seconds": 1800,
+  "params": {
+    "properties": {}
+  },
+  "agent": {
+    "type": "builtin",
+    "name": "cleanup_scan"
+  }
+}

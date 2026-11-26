@@ -1,0 +1,28 @@
+{
+  "id": "debloat.reinstall",
+  "title": "Debloat: reinstall apps",
+  "description": "Reinstalls removed Store apps with winget (Microsoft Store source first).",
+  "min_role": "technician",
+  "timeout_seconds": 3600,
+  "params": {
+    "properties": {
+      "packages": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9.*_-]{1,100}$"
+        },
+        "minItems": 1,
+        "maxItems": 100,
+        "uniqueItems": true
+      }
+    },
+    "required": [
+      "packages"
+    ]
+  },
+  "agent": {
+    "type": "builtin",
+    "name": "debloat_reinstall"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "id": "debloat.remove",
+  "title": "Debloat: remove apps",
+  "description": "Removes Store apps for all users and the provisioned copy (new users don't get them).",
+  "min_role": "technician",
+  "timeout_seconds": 1800,
+  "params": {
+    "properties": {
+      "packages": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9.*_-]{1,100}$"
+        },
+        "minItems": 1,
+        "maxItems": 100,
+        "uniqueItems": true
+      }
+    },
+    "required": [
+      "packages"
+    ]
+  },
+  "agent": {
+    "type": "builtin",
+    "name": "debloat_remove"
+  }
+}

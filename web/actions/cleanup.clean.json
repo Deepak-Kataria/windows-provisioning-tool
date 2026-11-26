@@ -1,0 +1,28 @@
+{
+  "id": "cleanup.clean",
+  "title": "Cleanup: clean",
+  "description": "Deletes the contents of the chosen cleanup locations.",
+  "min_role": "technician",
+  "timeout_seconds": 3600,
+  "params": {
+    "properties": {
+      "ids": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,40}$"
+        },
+        "minItems": 1,
+        "maxItems": 100,
+        "uniqueItems": true
+      }
+    },
+    "required": [
+      "ids"
+    ]
+  },
+  "agent": {
+    "type": "builtin",
+    "name": "cleanup_clean"
+  }
+}
