@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Audit log - IT Provisioning{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Audit log</h1></div>
+<div class="toolbar">
+  <input id="event" placeholder="Event (e.g. login_failed)" aria-label="Event">
+  <input id="username" placeholder="Username" aria-label="Username">
+  <button class="btn" id="apply">Filter</button>
+</div>
+<section class="card flush"><div id="audit-table"></div></section>
+<div class="center"><button class="btn ghost" id="more" hidden>Load more</button></div>
+{% endblock %}
+{% block scripts %}<script type="module" src="/static/pages/audit.js"></script>{% endblock %}

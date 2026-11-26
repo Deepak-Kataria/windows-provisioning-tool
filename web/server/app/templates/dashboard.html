@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - IT Provisioning{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Dashboard</h1></div>
+<div class="tiles" id="tiles"></div>
+<div class="grid2">
+  <section class="card"><div class="card-head"><h2>Recent jobs</h2><a href="/jobs">All jobs</a></div><div id="recent-jobs"></div></section>
+  <section class="card"><div class="card-head"><h2>Offline machines</h2><a href="/machines">All machines</a></div><div id="offline"></div></section>
+</div>
+{% endblock %}
+{% block scripts %}<script type="module" src="/static/pages/dashboard.js"></script>{% endblock %}

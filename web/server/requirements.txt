@@ -11,3 +11,4 @@ cryptography==50.0.2
 jsonschema==4.26.0
 python-multipart==0.0.34
 Jinja2==3.1.6
+qrcode==8.2

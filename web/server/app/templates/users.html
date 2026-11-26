@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Users - IT Provisioning{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Users</h1><button class="btn primary" id="add-user">Add user</button></div>
+<section class="card flush"><div id="user-table"></div></section>
+<p class="muted small">Roles: <b>viewer</b> sees everything, <b>technician</b> also runs actions, <b>admin</b> also manages users, enrollment and revocation. New users must change their password and set up MFA at first login.</p>
+{% endblock %}
+{% block scripts %}<script type="module" src="/static/pages/users.js"></script>{% endblock %}

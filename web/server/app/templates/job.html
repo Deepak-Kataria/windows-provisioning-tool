@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Job - IT Provisioning{% endblock %}
+{% block content %}
+<div id="job" data-id="{{ job_id }}">
+  <div class="page-head">
+    <div><a href="/jobs" class="muted">Jobs</a><h1 id="j-title">Job</h1><div id="j-sub" class="muted"></div></div>
+    <div class="actions" id="j-actions"></div>
+  </div>
+  <div id="j-body"></div>
+</div>
+{% endblock %}
+{% block scripts %}<script type="module" src="/static/pages/job.js"></script>{% endblock %}

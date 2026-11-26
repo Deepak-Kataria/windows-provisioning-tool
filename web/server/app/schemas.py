@@ -24,6 +24,7 @@ class LoginOut(BaseModel):
 class MfaSetupOut(BaseModel):
     secret: str
     otpauth_uri: str
+    qr_svg: str = ""  # data: URI of an SVG QR code for the authenticator app
 
 
 class UserOut(BaseModel):

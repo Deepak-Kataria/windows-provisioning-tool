@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Machine - IT Provisioning{% endblock %}
+{% block content %}
+<div id="machine" data-id="{{ machine_id }}">
+  <div class="page-head">
+    <div><a href="/machines" class="muted">Machines</a><h1 id="m-title">Loading...</h1><div id="m-sub" class="muted"></div></div>
+    <div class="actions" id="m-actions"></div>
+  </div>
+  <div class="tabs" role="tablist">
+    <button role="tab" data-tab="overview" class="active">Overview</button>
+    <button role="tab" data-tab="security">Security</button>
+    <button role="tab" data-tab="apps">Apps</button>
+    <button role="tab" data-tab="history">Job history</button>
+  </div>
+  <section class="tab-panel" data-panel="overview"></section>
+  <section class="tab-panel" data-panel="security" hidden></section>
+  <section class="tab-panel" data-panel="apps" hidden></section>
+  <section class="tab-panel" data-panel="history" hidden></section>
+</div>
+{% endblock %}
+{% block scripts %}<script type="module" src="/static/pages/machine.js"></script>{% endblock %}

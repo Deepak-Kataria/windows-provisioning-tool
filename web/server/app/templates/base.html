@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}IT Provisioning{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+</head>
+<body data-csrf="{{ csrf }}" data-role="{{ user.role }}" data-user="{{ user.username }}" data-user-id="{{ user.id }}">
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-mark">IT</span><div><b>Provisioning</b><small>web console</small></div></div>
+    <nav>
+      <a href="/" class="{{ 'active' if nav == 'dashboard' }}">Dashboard</a>
+      <a href="/machines" class="{{ 'active' if nav == 'machines' }}">Machines</a>
+      <a href="/jobs" class="{{ 'active' if nav == 'jobs' }}">Jobs</a>
+      {% if user.role == 'admin' %}
+      <div class="nav-sep">Admin</div>
+      <a href="/users" class="{{ 'active' if nav == 'users' }}">Users</a>
+      <a href="/audit" class="{{ 'active' if nav == 'audit' }}">Audit log</a>
+      {% endif %}
+    </nav>
+    <div class="me">
+      <a href="/account" class="{{ 'active' if nav == 'account' }}">
+        <b>{{ user.display_name or user.username }}</b><small>{{ user.role }}</small>
+      </a>
+      <button class="btn ghost small" id="logout">Log out</button>
+    </div>
+  </aside>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <div id="toasts" aria-live="polite"></div>
+  <script type="module" src="/static/app.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

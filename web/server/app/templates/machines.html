@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Machines - IT Provisioning{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Machines</h1>
+  {% if user.role == 'admin' %}<button class="btn primary" id="add-machine">Add machine</button>{% endif %}
+</div>
+<div class="toolbar">
+  <input type="search" id="q" placeholder="Search hostname or label" aria-label="Search machines">
+  <select id="online" aria-label="Filter by status">
+    <option value="">All</option><option value="true">Online</option><option value="false">Offline</option>
+  </select>
+  <label class="check"><input type="checkbox" id="revoked"> Show revoked</label>
+  <span class="muted" id="count"></span>
+</div>
+<section class="card flush"><div id="machine-table"></div></section>
+{% if user.role == 'admin' %}
+<section class="card"><div class="card-head"><h2>Pending enrollment codes</h2></div><div id="codes"></div></section>
+{% endif %}
+{% endblock %}
+{% block scripts %}<script type="module" src="/static/pages/machines.js"></script>{% endblock %}

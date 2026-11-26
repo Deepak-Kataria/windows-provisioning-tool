@@ -108,6 +108,19 @@ def totp_uri(secret: str, username: str) -> str:
     return pyotp.TOTP(secret).provisioning_uri(name=username, issuer_name=s.totp_issuer)
 
 
+def qr_data_uri(text: str) -> str:
+    """SVG QR code as a data: URI (no image library needed)."""
+    import io
+
+    import qrcode
+    import qrcode.image.svg
+
+    img = qrcode.make(text, image_factory=qrcode.image.svg.SvgPathImage, box_size=8, border=2)
+    buf = io.BytesIO()
+    img.save(buf)
+    return "data:image/svg+xml;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+
 def verify_totp(secret: str, code: str, last_step: int, now: float | None = None) -> int | None:
     """Check a 6-digit code (allowing one 30s step of clock drift).
 

@@ -4,7 +4,7 @@ Plan and design: [`docs/WEB_PLAN.md`](../docs/WEB_PLAN.md). Desktop app (repo ro
 
 ```
 web/
-  server/   FastAPI API: auth + MFA, users, machines, jobs, agent channel, audit
+  server/   FastAPI: API (auth + MFA, users, machines, jobs, agent channel, audit) + web pages
   agent/    Windows agent (itops_agent): enroll, outbound WSS, runs signed allowlisted actions
   actions/  Action definitions (*.json) - the ONLY things an agent can run
   tools/    bundle_tool.py (sign script bundle), apicli.py (test client until the UI exists)
@@ -26,30 +26,30 @@ powershell -ExecutionPolicy Bypass -File web\dev.ps1 test     # should say all p
 
 Needs Python 3.11 on PATH. No Docker or Postgres needed locally (dev uses SQLite in `web\.dev\`).
 
-## Try it locally (3 terminals)
+## Try it locally
 
 ```powershell
-# 1. one time: first admin user (password: 12+ chars, upper+lower+digit)
+# one time: first admin user (password: 12+ chars, upper+lower+digit)
 powershell -ExecutionPolicy Bypass -File web\dev.ps1 admin
 
 # terminal A: the server
 powershell -ExecutionPolicy Bypass -File web\dev.ps1 server
-
-# terminal B: log in (first time: shows MFA secret, add it to Authenticator), make a code
-powershell -ExecutionPolicy Bypass -File web\dev.ps1 cli login
-powershell -ExecutionPolicy Bypass -File web\dev.ps1 cli code "my desk"
-powershell -ExecutionPolicy Bypass -File web\dev.ps1 enroll XXXX-XXXX-XXXX-XXXX
-
-# terminal C: the agent
-powershell -ExecutionPolicy Bypass -File web\dev.ps1 agent
-
-# back in B:
-powershell -ExecutionPolicy Bypass -File web\dev.ps1 cli machines
-powershell -ExecutionPolicy Bypass -File web\dev.ps1 cli run <hostname> agent.ping '{\"message\":\"hi\"}'
-powershell -ExecutionPolicy Bypass -File web\dev.ps1 cli run <hostname> system.info
-powershell -ExecutionPolicy Bypass -File web\dev.ps1 cli audit
 ```
 
+Open **http://127.0.0.1:8000** in a browser. First login shows a QR code: scan it with
+Microsoft/Google Authenticator. Then Machines -> **Add machine** -> copy the code, and:
+
+```powershell
+# terminal B: enroll this PC and run its agent
+powershell -ExecutionPolicy Bypass -File web\dev.ps1 enroll XXXX-XXXX-XXXX-XXXX
+powershell -ExecutionPolicy Bypass -File web\dev.ps1 agent
+```
+
+The PC shows up online. Open it: Overview (system info), Security (scan, fix/revert,
+CSV export), Apps (install/uninstall from catalog), Job history. Jobs and Audit log pages too.
+
+Run the agent from an **elevated** terminal for real results (as a service it runs as SYSTEM).
+Command-line client (no browser): `web\dev.ps1 cli login`, `cli machines`, `cli run <PC> system.info`.
 API docs (dev only): http://127.0.0.1:8000/api/docs. Start fresh: delete `web\.dev\`.
 
 ## Security model (short)

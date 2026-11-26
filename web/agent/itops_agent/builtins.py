@@ -80,7 +80,9 @@ async def security_scan(ctx: JobContext, params: dict, _spec: dict):
                 "description": c.get("description", ""),
                 "impact": c.get("impact", ""),
                 "fix_label": c.get("fix_label", ""),
-                "can_fix": bool(c.get("fix_ps")),
+                # Remote fix only for real setting changes that can be reverted; desktop-only
+                # "fixes" that just open a Windows tool (shares, programs, ...) are useless remotely.
+                "can_fix": sc.is_auto_fixable(c),
                 "can_undo": bool(c.get("undo_ps")),
                 "disruptive": bool(c.get("disruptive")),
             }
@@ -94,6 +96,8 @@ async def security_fix(ctx: JobContext, params: dict, _spec: dict):
     if check is None:
         raise ActionFailed(f"unknown check {params['check_id']!r}")
     mode = params.get("mode", "fix")
+    if mode == "fix" and not sc.is_auto_fixable(check):
+        raise ActionFailed(f"check {check['id']!r} has no remote fix (it needs a person at the PC)")
     script = check.get("fix_ps" if mode == "fix" else "undo_ps")
     if not script:
         raise ActionFailed(f"check {check['id']!r} has no {mode} script")

@@ -27,6 +27,7 @@ from ..security import (
     hash_password,
     new_totp_secret,
     password_problem,
+    qr_data_uri,
     totp_uri,
     verify_password,
     verify_totp,
@@ -135,7 +136,8 @@ def mfa_setup(db: Session = Depends(get_db), ws: WebSession = Depends(get_any_se
     secret = new_totp_secret()
     user.totp_secret_enc = encrypt(secret)
     db.commit()
-    return MfaSetupOut(secret=secret, otpauth_uri=totp_uri(secret, user.username))
+    uri = totp_uri(secret, user.username)
+    return MfaSetupOut(secret=secret, otpauth_uri=uri, qr_svg=qr_data_uri(uri))
 
 
 @router.post("/mfa/confirm", response_model=LoginOut)

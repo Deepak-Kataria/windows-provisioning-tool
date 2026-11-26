@@ -1,6 +1,5 @@
 """Actions, jobs, live job output, and the audit log."""
-import asyncio
-import contextlib
+from urllib.parse import urlsplit
 
 from fastapi import (
     APIRouter,
@@ -19,11 +18,10 @@ from starlette.concurrency import run_in_threadpool
 from .. import jobs_service as js
 from ..actions import ActionError, Registry
 from ..audit import audit
-from ..config import get_settings
 from ..db import get_db, new_session, utcnow
 from ..deps import _load_session, require_role
 from ..hub import hub
-from ..models import JOB_ACTIVE, JOB_STATUSES, AuditLog, Job, JobLog, Machine, User
+from ..models import JOB_ACTIVE, JOB_STATUSES, AuditLog, Job, JobLog, User
 from ..netutil import client_ip
 from ..schemas import ActionOut, AuditOut, JobCreateIn, JobLogOut, JobOut
 from .machines import get_machine
@@ -190,7 +188,7 @@ async def stream_job(ws: WebSocket, job_id: str):
 
     # Same-origin check: cookies are SameSite=Strict, but WebSockets are not covered by CORS.
     origin = ws.headers.get("origin")
-    if origin and origin.rstrip("/") != get_settings().base_url.rstrip("/"):
+    if origin and urlsplit(origin).netloc != ws.headers.get("host", ""):
         await ws.close(code=4403)
         return
     queue = hub.subscribe(job_id)  # subscribe before reading backlog so nothing is missed

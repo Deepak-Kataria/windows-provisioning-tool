@@ -11,7 +11,8 @@ How to run/test locally: [`web/README.md`](../web/README.md).
 - [x] Agent: enroll/run/service CLI, reconnect, DPAPI token, signed bundle, allowlisted executor
 - [x] Phase 1 backend: system.info, security.scan/fix, apps.install/uninstall (catalog only),
       app catalog API, latest result per machine, security CSV export
-- [ ] Web UI (Jinja/HTMX) for all of the above
+- [x] Web UI: login + MFA QR setup, dashboard, machines (+ add machine), machine detail
+      (overview, security fix/revert, apps, history), jobs + live output, users, audit, account
 - [ ] Agent exe (PyInstaller) + agent-setup
 - [ ] Phase 2+: debloat, tweaks, telemetry, cleanup, bulk actions, groups, ...
 - [ ] Deploy on the Ubuntu server (waiting on server + DNS)

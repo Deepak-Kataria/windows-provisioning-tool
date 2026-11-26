@@ -7,13 +7,17 @@ import contextlib
 from contextlib import asynccontextmanager
 from datetime import timedelta
 
+from pathlib import Path
+
 from fastapi import FastAPI, Request
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import delete
 
 from .actions import Registry
 from .config import Settings, get_settings
 from .db import Base, get_engine, init_engine, new_session, utcnow
 from .models import WebSession
+from . import web
 from .routers import agent, auth, catalog, jobs, machines, users
 
 APP_VERSION = "0.1.0"
@@ -71,7 +75,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         h.setdefault("X-Content-Type-Options", "nosniff")
         h.setdefault("X-Frame-Options", "DENY")
         h.setdefault("Referrer-Policy", "no-referrer")
-        h.setdefault("Cache-Control", "no-store")
+        if not request.url.path.startswith("/static/"):
+            h.setdefault("Cache-Control", "no-store")
         h.setdefault(
             "Content-Security-Policy",
             "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
@@ -83,6 +88,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     for r in (auth.router, users.router, machines.router, jobs.router, catalog.router, agent.router):
         app.include_router(r)
+    app.include_router(web.router)
+    app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
     @app.get("/api/health")
     def health():

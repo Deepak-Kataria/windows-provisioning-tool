@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Account - IT Provisioning{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Account</h1></div>
+{% if user.must_change_password %}
+<div class="banner warn">Your password was set by an admin. Choose a new one to continue.</div>
+{% endif %}
+<section class="card narrow">
+  <h2>Change password</h2>
+  <form id="pw-form" class="stack">
+    <label>Current password <input type="password" name="current_password" autocomplete="current-password" required></label>
+    <label>New password <input type="password" name="new_password" autocomplete="new-password" minlength="12" required></label>
+    <label>Repeat new password <input type="password" name="repeat" autocomplete="new-password" minlength="12" required></label>
+    <p class="muted small">At least 12 characters, upper and lower case, and a digit.</p>
+    <button class="btn primary" type="submit">Change password</button>
+  </form>
+</section>
+<section class="card narrow">
+  <h2>Signed in as</h2>
+  <p><b>{{ user.display_name }}</b> ({{ user.username }}), role <b>{{ user.role }}</b>.</p>
+  <p class="muted small">Lost your authenticator? Ask another admin to reset your MFA from the Users page.</p>
+</section>
+{% endblock %}
+{% block scripts %}<script type="module" src="/static/pages/account.js"></script>{% endblock %}

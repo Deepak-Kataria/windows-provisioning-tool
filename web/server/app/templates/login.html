@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in - IT Provisioning</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+</head>
+<body class="login-body">
+  <div class="login-card">
+    <div class="brand big"><span class="brand-mark">IT</span><div><b>Provisioning</b><small>web console</small></div></div>
+
+    <form id="step-password" class="stack">
+      <h2>Sign in</h2>
+      <label>Username <input name="username" autocomplete="username" required autofocus></label>
+      <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+      <button class="btn primary" type="submit">Continue</button>
+    </form>
+
+    <form id="step-mfa" class="stack" hidden>
+      <h2>Two-step verification</h2>
+      <p class="muted">Enter the 6-digit code from your authenticator app.</p>
+      <label>Code <input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}" maxlength="7" required></label>
+      <button class="btn primary" type="submit">Verify</button>
+    </form>
+
+    <form id="step-setup" class="stack" hidden>
+      <h2>Set up two-step verification</h2>
+      <p class="muted">Required for every account. Scan this with Microsoft Authenticator, Google Authenticator or similar, then enter the code it shows.</p>
+      <img id="qr" alt="QR code for authenticator app" class="qr">
+      <details><summary>Can't scan? Enter the key manually</summary><code id="secret" class="secret"></code></details>
+      <label>Code <input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}" maxlength="7" required></label>
+      <button class="btn primary" type="submit">Turn on and sign in</button>
+    </form>
+
+    <p id="login-error" class="error" role="alert" hidden></p>
+  </div>
+  <script type="module" src="/static/pages/login.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Jobs - IT Provisioning{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Jobs</h1></div>
+<div class="toolbar">
+  <select id="status" aria-label="Filter by status">
+    <option value="">Any status</option>
+    <option>queued</option><option>sent</option><option>running</option>
+    <option>succeeded</option><option>failed</option><option>cancelled</option>
+  </select>
+  <select id="action" aria-label="Filter by action"><option value="">Any action</option></select>
+</div>
+<section class="card flush"><div id="job-table"></div></section>
+<div class="center"><button class="btn ghost" id="more" hidden>Load more</button></div>
+{% endblock %}
+{% block scripts %}<script type="module" src="/static/pages/jobs.js"></script>{% endblock %}
